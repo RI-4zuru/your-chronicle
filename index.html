@@ -56,6 +56,7 @@
               <div><span>計算平均</span><b id="inspirationAverage">—</b></div>
               <div><span>残り周回</span><b id="inspirationRuns">—</b></div>
               <div><span>計算基準</span><b id="inspirationBasis">—</b></div>
+              <div><span>推定時間</span><b id="inspirationTime">—</b></div>
             </div>
           </article>
 
@@ -74,6 +75,7 @@
               <div><span>1周獲得</span><b id="sinAverage">—</b></div>
               <div><span>残り周回</span><b id="sinRuns">—</b></div>
               <div><span>既定値</span><b id="sinDefault">42</b></div>
+              <div><span>推定時間</span><b id="sinTime">—</b></div>
             </div>
           </article>
 
@@ -92,6 +94,7 @@
               <div><span>計算平均</span><b id="dissAverage">—</b></div>
               <div><span>残り周回</span><b id="dissRuns">—</b></div>
               <div><span>目標Lv合計</span><b id="jealousyTargetTotal">—</b></div>
+              <div><span>推定時間</span><b id="dissTime">—</b></div>
             </div>
           </article>
         </div>
@@ -111,12 +114,13 @@
 
       <section class="page" id="page-runs">
         <div class="page-title">
-          <div><div class="eyebrow">RUN LOG</div><h2>周回記録</h2><p>1周分の実獲得量を記録。空欄のリソースは更新しません。</p></div>
+          <div><div class="eyebrow">RUN LOG</div><h2>周回記録</h2><p>実獲得量・日時・周回時間を記録。周回時間は空欄なら平均計算から除外します。</p></div>
           <button class="primary" data-open-run>＋ 周回を記録</button>
         </div>
 
-        <div class="stats-grid">
+        <div class="stats-grid run-stats-grid">
           <div class="mini-card"><span>記録数</span><b id="runCount">0</b></div>
+          <div class="mini-card"><span>平均周回時間</span><b id="runTimeAvg">—</b><small id="runTimeCount">時間記録 0件</small></div>
           <div class="mini-card"><span>ひらめき・全平均</span><b id="runInspAvg">—</b></div>
           <div class="mini-card"><span>不満・全平均</span><b id="runDissAvg">—</b></div>
           <div class="mini-card"><span>直近10周</span><b id="runRecentAvg">—</b></div>
@@ -133,7 +137,7 @@
           </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>#</th><th>日時</th><th>ひらめき</th><th>Sin</th><th>不満</th><th>メモ</th><th></th></tr></thead>
+              <thead><tr><th>#</th><th>日時</th><th>周回時間</th><th>ひらめき</th><th>Sin</th><th>不満</th><th>メモ</th><th></th></tr></thead>
               <tbody id="runTableBody"></tbody>
             </table>
           </div>
@@ -152,6 +156,7 @@
             <div><span>現在所持</span><strong id="planCurrentDiss">0</strong></div>
             <div><span>不足分</span><strong id="planShortfall">0</strong></div>
             <div><span>推定残り周回</span><strong id="planRuns">—</strong></div>
+            <div><span>推定時間</span><strong id="planTime">—</strong></div>
           </div>
           <div class="bulk-row">
             <label>全項目を <input id="bulkTarget" type="number" min="0" step="1" value="400"> Lvまで</label>
@@ -229,7 +234,11 @@
   <dialog id="runDialog">
     <form method="dialog" id="runForm" class="dialog-card">
       <div class="dialog-head"><div><div class="eyebrow" id="runDialogEyebrow">NEW RUN</div><h2 id="runDialogTitle">今回の周回を記録</h2></div><button class="icon-button" value="cancel" aria-label="閉じる">×</button></div>
-      <p class="dialog-help" id="runDialogHelp">今回増えた量を入力してください。空欄はそのリソースを更新しません。K / M / B / T 表記も使えます。</p>
+      <p class="dialog-help" id="runDialogHelp">今回増えた量を入力してください。周回時間は空欄でもOKで、入力がある記録だけで平均を計算します。</p>
+      <div class="run-meta-grid">
+        <label>日時<input id="runAt" type="datetime-local"></label>
+        <label>1周の時間 <small>任意</small><input id="runDuration" type="text" inputmode="text" placeholder="例: 12:30 / 12.5分 / 90秒"></label>
+      </div>
       <div class="run-input-grid">
         <label class="gain inspiration"><span>✦ ひらめき</span><input id="runInspiration" type="text" inputmode="decimal" placeholder="例: 2.48K"></label>
         <label class="gain sin"><span>◇ Sin</span><input id="runSin" type="text" inputmode="decimal" placeholder="42"></label>

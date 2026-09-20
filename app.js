@@ -81,6 +81,94 @@
     return Number.isFinite(n) ? n * (map[m[2]] || 1) : null;
   }
 
+  function parseDuration(value){
+    if (value == null) return null;
+    const raw = String(value).trim();
+    if (!raw) return null;
+    const s = raw.replace(/\s+/g,'').replace(/：/g,':').toLowerCase();
+
+    // h:mm:ss / mm:ss
+    if (/^\d+(?::\d{1,2}){1,2}$/.test(s)) {
+      const parts = s.split(':').map(Number);
+      if (parts.some(n => !Number.isFinite(n))) return null;
+      if (parts.length === 2) {
+        const [m,sec] = parts;
+        if (sec >= 60) return null;
+        return m * 60 + sec;
+      }
+      const [h,m,sec] = parts;
+      if (m >= 60 || sec >= 60) return null;
+      return h * 3600 + m * 60 + sec;
+    }
+
+    // Japanese / unit-suffixed forms: 1時間5分30秒, 12.5分, 90秒, 1.2h, 15m, 30s
+    let total = 0;
+    let matched = false;
+    const patterns = [
+      [/([+-]?\d*\.?\d+)(?:時間|hours?|hrs?|h)/g, 3600],
+      [/([+-]?\d*\.?\d+)(?:分|minutes?|mins?|m)/g, 60],
+      [/([+-]?\d*\.?\d+)(?:秒|seconds?|secs?|s)/g, 1]
+    ];
+    let rest = s;
+    for (const [re,mult] of patterns) {
+      rest = rest.replace(re, (_,n) => {
+        const v = Number(n);
+        if (Number.isFinite(v)) { total += v * mult; matched = true; }
+        return '';
+      });
+    }
+    if (matched && !rest) return total > 0 ? total : null;
+
+    // Bare number = minutes (most convenient for one-run timing)
+    if (/^\d*\.?\d+$/.test(s)) {
+      const minutes = Number(s);
+      return Number.isFinite(minutes) && minutes > 0 ? minutes * 60 : null;
+    }
+    return null;
+  }
+
+  function validDurations(){
+    return state.runs.map(r => Number(r.durationSeconds)).filter(n => Number.isFinite(n) && n > 0);
+  }
+
+  function averageDuration(){ return average(validDurations()); }
+
+  function formatDuration(seconds){
+    const total = Math.max(0, Math.round(Number(seconds)||0));
+    if (!total) return '—';
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const sec = total % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+    return `${m}:${String(sec).padStart(2,'0')}`;
+  }
+
+  function formatEstimatedTime(seconds){
+    const total = Math.max(0, Math.round(Number(seconds)||0));
+    if (!total) return '—';
+    const day = Math.floor(total / 86400);
+    const hour = Math.floor((total % 86400) / 3600);
+    const min = Math.floor((total % 3600) / 60);
+    if (day > 0) return `${day}日 ${hour}時間`;
+    if (hour > 0) return `${hour}時間 ${min}分`;
+    if (min > 0) return `${min}分`;
+    return `${total}秒`;
+  }
+
+  function toLocalDateTimeValue(value){
+    const d = value ? new Date(value) : new Date();
+    if (Number.isNaN(d.getTime())) return '';
+    const pad = n => String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function parseLocalDateTime(value){
+    const raw = String(value||'').trim();
+    if (!raw) return null;
+    const d = new Date(raw);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+
   function formatNumber(value, digits = 2){
     const n = Number(value);
     if (!Number.isFinite(n)) return '—';
@@ -174,6 +262,7 @@
     const sin = state.resources.sin;
     const diss = state.resources.dissatisfaction;
     const inspAvg = averageByBasis('inspiration', insp.basis, insp.manualAverage);
+    const avgTime = averageDuration();
     const inspRemain = Math.max(0,insp.target-insp.current);
     const inspRuns = inspAvg>0 ? roundUp(inspRemain/inspAvg) : null;
 
@@ -184,6 +273,7 @@
     $('#inspirationAverage').textContent=inspAvg>0?formatNumber(inspAvg):'未記録';
     $('#inspirationRuns').textContent=inspRuns==null?'—':`${formatNumber(inspRuns,0)}周`;
     $('#inspirationBasis').textContent=basisLabel(insp.basis);
+    $('#inspirationTime').textContent=(inspRuns!=null && avgTime>0)?formatEstimatedTime(inspRuns*avgTime):'—';
     setBar('#inspirationBar',pct(insp.current,insp.target));
 
     const sinRemain=Math.max(0,sin.target-sin.current);
@@ -196,6 +286,7 @@
     $('#sinAverage').textContent=sinGain?formatNumber(sinGain):'—';
     $('#sinRuns').textContent=sinRuns==null?'—':`${formatNumber(sinRuns,0)}周`;
     $('#sinDefault').textContent=formatNumber(sinGain);
+    $('#sinTime').textContent=(sinRuns!=null && avgTime>0)?formatEstimatedTime(sinRuns*avgTime):'—';
     setBar('#sinBar',pct(sin.current,sin.target));
 
     const plan=getPlan();
@@ -206,6 +297,7 @@
     $('#dissAverage').textContent=plan.avg>0?formatNumber(plan.avg):'未記録';
     $('#dissRuns').textContent=plan.runs==null?'—':`${formatNumber(plan.runs,0)}周`;
     $('#jealousyTargetTotal').textContent=formatNumber(plan.targetTotal,0);
+    $('#dissTime').textContent=(plan.runs!=null && avgTime>0)?formatEstimatedTime(plan.runs*avgTime):'—';
     setBar('#dissBar',planProgress);
 
     renderRecentRuns();
@@ -219,7 +311,7 @@
     list.forEach((r,idx)=>{
       const actualIndex=state.runs.length-idx;
       const div=document.createElement('div'); div.className='recent-run';
-      div.innerHTML=`<span class="run-index">#${actualIndex}</span><span class="gain-pill">✦ ${r.inspiration==null?'—':formatNumber(r.inspiration)}</span><span class="gain-pill">◇ ${r.sin==null?'—':formatNumber(r.sin)}</span><span class="gain-pill">◆ ${r.dissatisfaction==null?'—':formatNumber(r.dissatisfaction)}</span>`;
+      div.innerHTML=`<span class="run-index">#${actualIndex}</span><span class="gain-pill">✦ ${r.inspiration==null?'—':formatNumber(r.inspiration)}</span><span class="gain-pill">◇ ${r.sin==null?'—':formatNumber(r.sin)}</span><span class="gain-pill">◆ ${r.dissatisfaction==null?'—':formatNumber(r.dissatisfaction)}</span><span class="gain-pill time-pill">◷ ${r.durationSeconds?formatDuration(r.durationSeconds):'—'}</span>`;
       root.appendChild(div);
     });
   }
@@ -248,6 +340,10 @@
     const ia=average(validGains('inspiration'));
     const da=average(validGains('dissatisfaction'));
     const recent=average(validGains('inspiration').slice(-10));
+    const durations=validDurations();
+    const avgTime=average(durations);
+    $('#runTimeAvg').textContent=avgTime?formatDuration(avgTime):'—';
+    $('#runTimeCount').textContent=`時間記録 ${durations.length}件`;
     $('#runInspAvg').textContent=ia?formatNumber(ia):'—';
     $('#runDissAvg').textContent=da?formatNumber(da):'—';
     $('#runRecentAvg').textContent=recent?`✦ ${formatNumber(recent)}`:'—';
@@ -256,10 +352,10 @@
     let indexed=state.runs.map((r,i)=>({r,i}));
     if(runFilter!=='all')indexed=indexed.slice(-Number(runFilter));
     indexed.reverse();
-    if(!indexed.length){tbody.innerHTML='<tr><td colspan="7" style="color:#8e91a5;text-align:center;padding:32px">まだ記録がありません。</td></tr>';return;}
+    if(!indexed.length){tbody.innerHTML='<tr><td colspan="8" style="color:#8e91a5;text-align:center;padding:32px">まだ記録がありません。</td></tr>';return;}
     indexed.forEach(({r,i})=>{
       const tr=document.createElement('tr');
-      tr.innerHTML=`<td>#${i+1}</td><td>${new Date(r.at).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</td><td>${r.inspiration==null?'—':formatNumber(r.inspiration)}</td><td>${r.sin==null?'—':formatNumber(r.sin)}</td><td>${r.dissatisfaction==null?'—':formatNumber(r.dissatisfaction)}</td><td class="memo">${escapeHtml(r.memo||'')}</td><td><div class="row-actions"><button class="edit-row" data-edit-run="${i}" title="編集">編集</button><button class="delete-row" data-delete-run="${i}" title="削除">×</button></div></td>`;
+      tr.innerHTML=`<td>#${i+1}</td><td>${new Date(r.at).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</td><td>${r.durationSeconds?formatDuration(r.durationSeconds):'—'}</td><td>${r.inspiration==null?'—':formatNumber(r.inspiration)}</td><td>${r.sin==null?'—':formatNumber(r.sin)}</td><td>${r.dissatisfaction==null?'—':formatNumber(r.dissatisfaction)}</td><td class="memo">${escapeHtml(r.memo||'')}</td><td><div class="row-actions"><button class="edit-row" data-edit-run="${i}" title="編集">編集</button><button class="delete-row" data-delete-run="${i}" title="削除">×</button></div></td>`;
       tbody.appendChild(tr);
     });
   }
@@ -270,6 +366,8 @@
     $('#planCurrentDiss').textContent=formatNumber(plan.owned);
     $('#planShortfall').textContent=formatNumber(plan.shortfall);
     $('#planRuns').textContent=plan.runs==null?'—':`${formatNumber(plan.runs,0)}周`;
+    const avgTime=averageDuration();
+    $('#planTime').textContent=(plan.runs!=null && avgTime>0)?formatEstimatedTime(plan.runs*avgTime):'—';
 
     const root=$('#jealousyGroups');root.innerHTML='';
     const groups=[...new Set(state.jealousy.map(x=>x.group))];
@@ -319,13 +417,13 @@
     $('#runDialogTitle').textContent = editing ? `周回記録 #${editingRunIndex+1} を編集` : '今回の周回を記録';
     $('#saveRun').textContent = editing ? '変更を保存' : '年代記に記録';
     $('#runDialogHelp').textContent = editing
-      ? '獲得量やメモを修正できます。獲得量を変更すると、現在の所持量にも差分を自動反映します。空欄は「記録なし」として扱います。'
-      : '今回増えた量を入力してください。空欄はそのリソースを更新しません。K / M / B / T 表記も使えます。';
+      ? '日時・周回時間・獲得量・メモを修正できます。獲得量の変更は現在の所持量にも差分反映します。周回時間が空欄の記録は平均時間から除外します。'
+      : '今回増えた量を入力してください。周回時間は任意です。時間を入力した記録だけで平均周回時間と推定所要時間を計算します。';
   }
 
   function openRunDialog(){
     setRunDialogMode(null);
-    $('#runInspiration').value='';$('#runSin').value=state.resources.sin.defaultGain?formatPlain(state.resources.sin.defaultGain):'';$('#runDissatisfaction').value='';$('#runMemo').value='';
+    $('#runAt').value=toLocalDateTimeValue();$('#runDuration').value='';$('#runInspiration').value='';$('#runSin').value=state.resources.sin.defaultGain?formatPlain(state.resources.sin.defaultGain):'';$('#runDissatisfaction').value='';$('#runMemo').value='';
     $('#runDialog').showModal();
     setTimeout(()=>$('#runInspiration').focus(),40);
   }
@@ -334,6 +432,8 @@
     const run=state.runs[index];
     if(!run)return;
     setRunDialogMode(index);
+    $('#runAt').value=toLocalDateTimeValue(run.at);
+    $('#runDuration').value=run.durationSeconds?formatDuration(run.durationSeconds):'';
     $('#runInspiration').value=run.inspiration==null?'':formatPlain(run.inspiration);
     $('#runSin').value=run.sin==null?'':formatPlain(run.sin);
     $('#runDissatisfaction').value=run.dissatisfaction==null?'':formatPlain(run.dissatisfaction);
@@ -344,6 +444,11 @@
 
   function saveRun(){
     const insp=parseNumber($('#runInspiration').value), sin=parseNumber($('#runSin').value), diss=parseNumber($('#runDissatisfaction').value);
+    const at=parseLocalDateTime($('#runAt').value);
+    const durationRaw=$('#runDuration').value;
+    const durationSeconds=parseDuration(durationRaw);
+    if(!at){toast('日時を確認してください');return;}
+    if(String(durationRaw).trim() && (!durationSeconds || durationSeconds<=0)){toast('周回時間を確認してください（例: 12:30 / 90秒 / 12.5分）');return;}
     const supplied=[$('#runInspiration').value,$('#runSin').value,$('#runDissatisfaction').value].some(x=>String(x).trim());
     if(!supplied){toast('少なくとも1つ獲得量を入力してください');return;}
     if([['ひらめき',$('#runInspiration').value,insp],['Sin',$('#runSin').value,sin],['不満',$('#runDissatisfaction').value,diss]].some(([,raw,n])=>String(raw).trim() && (n==null || n<0))){toast('獲得量の入力を確認してください');return;}
@@ -351,7 +456,7 @@
     if(editingRunIndex!==null){
       const old=state.runs[editingRunIndex];
       if(!old){toast('編集する記録が見つかりません');return;}
-      const next={...old,inspiration:insp,sin,dissatisfaction:diss,memo:$('#runMemo').value.trim()};
+      const next={...old,at,durationSeconds:durationSeconds||null,inspiration:insp,sin,dissatisfaction:diss,memo:$('#runMemo').value.trim()};
       const delta=(a,b)=>(Number(b)||0)-(Number(a)||0);
       state.resources.inspiration.current=Math.max(0,(Number(state.resources.inspiration.current)||0)+delta(old.inspiration,next.inspiration));
       state.resources.sin.current=Math.max(0,(Number(state.resources.sin.current)||0)+delta(old.sin,next.sin));
@@ -365,7 +470,7 @@
       return;
     }
 
-    const run={at:new Date().toISOString(),inspiration:insp,sin,dissatisfaction:diss,memo:$('#runMemo').value.trim()};
+    const run={at,durationSeconds:durationSeconds||null,inspiration:insp,sin,dissatisfaction:diss,memo:$('#runMemo').value.trim()};
     state.runs.push(run);
     if(insp!=null)state.resources.inspiration.current+=insp;
     if(sin!=null)state.resources.sin.current+=sin;
