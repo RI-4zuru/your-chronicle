@@ -1,0 +1,384 @@
+(() => {
+  'use strict';
+
+  const STORAGE_KEY = 'yourChronicleProgressArchive.v1';
+
+  const defaultState = {
+    version: 1,
+    resources: {
+      inspiration: { current: 40000, target: 10000000, basis: '10', manualAverage: 0 },
+      sin: { current: 1500, target: 10000, defaultGain: 42 },
+      dissatisfaction: { current: 10200, basis: '10', manualAverage: 0 }
+    },
+    runs: [],
+    jealousy: [
+      { group: '身体', name: '経験値獲得量', current: 100, target: 100 },
+      { group: '身体', name: '最大HP', current: 100, target: 100 },
+      { group: '身体', name: '物理攻撃力', current: 100, target: 100 },
+      { group: '身体', name: '物理防御力', current: 100, target: 100 },
+      { group: '身体', name: '魔法攻撃力', current: 200, target: 200 },
+      { group: '身体', name: '魔法防御力', current: 100, target: 100 },
+      { group: '身体', name: 'ダンジョン関連', current: 100, target: 100 },
+
+      { group: '創造性', name: 'インスタント関連', current: 400, target: 400 },
+      { group: '創造性', name: 'ループアクション関連', current: 500, target: 500 },
+      { group: '創造性', name: 'ダンジョン報酬', current: 500, target: 500 },
+      { group: '創造性', name: '聖なる儀式', current: 200, target: 200 },
+      { group: '創造性', name: '闇の儀式', current: 200, target: 200 },
+      { group: '創造性', name: '習慣効率', current: 200, target: 200 },
+      { group: '創造性', name: 'クリスタル関連', current: 200, target: 200 },
+
+      { group: 'カリスマ', name: 'リサーチドロップ', current: 400, target: 400 },
+      { group: 'カリスマ', name: '種ドロップ', current: 300, target: 300 },
+      { group: 'カリスマ', name: 'リソースドロップ', current: 200, target: 200 },
+      { group: 'カリスマ', name: '意志', current: 200, target: 200 },
+      { group: 'カリスマ', name: '使い魔召喚関連', current: 200, target: 200 },
+      { group: 'カリスマ', name: '満腹度', current: 500, target: 500 },
+      { group: 'カリスマ', name: 'クエスト関連', current: 200, target: 200 }
+    ]
+  };
+
+  let state = loadState();
+  let activeResource = null;
+  let runFilter = 'all';
+
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+
+  function clone(obj){ return JSON.parse(JSON.stringify(obj)); }
+
+  function mergeState(raw){
+    const base = clone(defaultState);
+    if (!raw || typeof raw !== 'object') return base;
+    if (raw.resources) {
+      for (const key of Object.keys(base.resources)) base.resources[key] = { ...base.resources[key], ...(raw.resources[key] || {}) };
+    }
+    if (Array.isArray(raw.runs)) base.runs = raw.runs;
+    if (Array.isArray(raw.jealousy) && raw.jealousy.length) base.jealousy = raw.jealousy.map((x,i) => ({...base.jealousy[i % base.jealousy.length], ...x}));
+    return base;
+  }
+
+  function loadState(){
+    try { return mergeState(JSON.parse(localStorage.getItem(STORAGE_KEY))); }
+    catch { return clone(defaultState); }
+  }
+
+  function saveState(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    renderAll();
+  }
+
+  function parseNumber(value){
+    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+    if (value == null) return null;
+    let s = String(value).trim().replace(/,/g,'').replace(/＋/g,'+').toUpperCase();
+    if (!s) return null;
+    const map = {K:1e3,M:1e6,B:1e9,T:1e12,Q:1e15};
+    const m = s.match(/^([+-]?\d*\.?\d+)\s*([KMBTQ])?$/);
+    if (!m) return null;
+    const n = Number(m[1]);
+    return Number.isFinite(n) ? n * (map[m[2]] || 1) : null;
+  }
+
+  function formatNumber(value, digits = 2){
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '—';
+    const abs = Math.abs(n);
+    const units = [
+      [1e15,'Qa'],[1e12,'T'],[1e9,'B'],[1e6,'M'],[1e3,'K']
+    ];
+    for (const [v,u] of units) {
+      if (abs >= v) {
+        const x = n / v;
+        const d = Math.abs(x) >= 100 ? 0 : Math.abs(x) >= 10 ? 1 : digits;
+        return `${x.toFixed(d).replace(/\.0+$|(?<=\.[0-9])0+$/,'')}${u}`;
+      }
+    }
+    if (Number.isInteger(n)) return n.toLocaleString('ja-JP');
+    return n.toLocaleString('ja-JP',{maximumFractionDigits:digits});
+  }
+
+  function roundUp(value){ return Number.isFinite(value) && value > 0 ? Math.ceil(value) : value <= 0 ? 0 : null; }
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+  function pct(current,target){ return target > 0 ? clamp(current/target*100,0,100) : 0; }
+
+  function validGains(key){
+    return state.runs.map(r => Number(r[key])).filter(n => Number.isFinite(n) && n >= 0);
+  }
+
+  function average(list){ return list.length ? list.reduce((a,b)=>a+b,0)/list.length : 0; }
+  function averageByBasis(key, basis, manual){
+    if (basis === 'manual') return Number(manual) || 0;
+    const list = validGains(key);
+    if (!list.length) return 0;
+    if (basis === 'all') return average(list);
+    const n = Math.max(1, Number(basis)||10);
+    return average(list.slice(-n));
+  }
+
+  // 通常の嫉妬項目:
+  // Lv0→1 = 10 不満
+  // Lv1→2 = 1.0, Lv2→3 = 1.1, ...
+  function jealousyCostToLevel(level){
+    const L = Math.max(0, Math.floor(Number(level)||0));
+    if (L <= 0) return 0;
+    if (L === 1) return 10;
+    // 10 + sum_{current=1}^{L-1} (0.9 + 0.1*current)
+    const n = L - 1;
+    const sumCurrent = n * (n + 1) / 2;
+    return 10 + 0.9 * n + 0.1 * sumCurrent;
+  }
+
+  function jealousyNeed(current,target){
+    const c = Math.max(0, Math.floor(Number(current)||0));
+    const t = Math.max(0, Math.floor(Number(target)||0));
+    return Math.max(0, jealousyCostToLevel(t) - jealousyCostToLevel(c));
+  }
+
+  function getPlan(){
+    const need = state.jealousy.reduce((s,x)=>s+jealousyNeed(x.current,x.target),0);
+    const owned = Math.max(0, Number(state.resources.dissatisfaction.current)||0);
+    const shortfall = Math.max(0, need - owned);
+    const avg = averageByBasis('dissatisfaction', state.resources.dissatisfaction.basis, state.resources.dissatisfaction.manualAverage);
+    const runs = avg > 0 ? roundUp(shortfall/avg) : null;
+    const currentTotal = state.jealousy.reduce((s,x)=>s+(Number(x.current)||0),0);
+    const targetTotal = state.jealousy.reduce((s,x)=>s+(Number(x.target)||0),0);
+    return {need,owned,shortfall,avg,runs,currentTotal,targetTotal};
+  }
+
+  function basisLabel(basis){
+    if (basis === 'all') return '全履歴';
+    if (basis === 'manual') return '手入力';
+    return `直近${basis}周`;
+  }
+
+  function renderAll(){
+    renderHeader();
+    renderDashboard();
+    renderRuns();
+    renderJealousy();
+    renderSettings();
+  }
+
+  function renderHeader(){
+    $('#headerRuns').textContent = state.runs.length.toLocaleString('ja-JP');
+    const last = state.runs.at(-1);
+    $('#headerLastRun').textContent = last ? new Date(last.at).toLocaleDateString('ja-JP',{month:'numeric',day:'numeric'}) : '—';
+  }
+
+  function setBar(id, value){ $(id).style.width = `${clamp(value,0,100)}%`; }
+
+  function renderDashboard(){
+    const insp = state.resources.inspiration;
+    const sin = state.resources.sin;
+    const diss = state.resources.dissatisfaction;
+    const inspAvg = averageByBasis('inspiration', insp.basis, insp.manualAverage);
+    const inspRemain = Math.max(0,insp.target-insp.current);
+    const inspRuns = inspAvg>0 ? roundUp(inspRemain/inspAvg) : null;
+
+    $('#inspirationCurrent').textContent=formatNumber(insp.current);
+    $('#inspirationTarget').textContent=formatNumber(insp.target);
+    $('#inspirationPercent').textContent=`${pct(insp.current,insp.target).toFixed(2)}%`;
+    $('#inspirationRemaining').textContent=formatNumber(inspRemain);
+    $('#inspirationAverage').textContent=inspAvg>0?formatNumber(inspAvg):'未記録';
+    $('#inspirationRuns').textContent=inspRuns==null?'—':`${formatNumber(inspRuns,0)}周`;
+    $('#inspirationBasis').textContent=basisLabel(insp.basis);
+    setBar('#inspirationBar',pct(insp.current,insp.target));
+
+    const sinRemain=Math.max(0,sin.target-sin.current);
+    const sinGain=Math.max(0,Number(sin.defaultGain)||0);
+    const sinRuns=sinGain>0?roundUp(sinRemain/sinGain):null;
+    $('#sinCurrent').textContent=formatNumber(sin.current);
+    $('#sinTarget').textContent=formatNumber(sin.target);
+    $('#sinPercent').textContent=`${pct(sin.current,sin.target).toFixed(2)}%`;
+    $('#sinRemaining').textContent=formatNumber(sinRemain);
+    $('#sinAverage').textContent=sinGain?formatNumber(sinGain):'—';
+    $('#sinRuns').textContent=sinRuns==null?'—':`${formatNumber(sinRuns,0)}周`;
+    $('#sinDefault').textContent=formatNumber(sinGain);
+    setBar('#sinBar',pct(sin.current,sin.target));
+
+    const plan=getPlan();
+    const planProgress = plan.need>0 ? clamp(plan.owned/plan.need*100,0,100) : 0;
+    $('#dissCurrent').textContent=formatNumber(diss.current);
+    $('#dissPlanPercent').textContent=plan.need>0?`${planProgress.toFixed(1)}% 確保`:'計画なし';
+    $('#dissNeeded').textContent=plan.need>0?formatNumber(plan.need):'—';
+    $('#dissAverage').textContent=plan.avg>0?formatNumber(plan.avg):'未記録';
+    $('#dissRuns').textContent=plan.runs==null?'—':`${formatNumber(plan.runs,0)}周`;
+    $('#jealousyTargetTotal').textContent=formatNumber(plan.targetTotal,0);
+    setBar('#dissBar',planProgress);
+
+    renderRecentRuns();
+    renderMilestones();
+  }
+
+  function renderRecentRuns(){
+    const root=$('#recentRuns'); root.innerHTML='';
+    const list=state.runs.slice(-5).reverse();
+    if(!list.length){root.innerHTML='<div class="empty-state">まだ周回記録がありません。「今回の周回を記録」から最初の1周を残してみましょう。</div>';return;}
+    list.forEach((r,idx)=>{
+      const actualIndex=state.runs.length-idx;
+      const div=document.createElement('div'); div.className='recent-run';
+      div.innerHTML=`<span class="run-index">#${actualIndex}</span><span class="gain-pill">✦ ${r.inspiration==null?'—':formatNumber(r.inspiration)}</span><span class="gain-pill">◇ ${r.sin==null?'—':formatNumber(r.sin)}</span><span class="gain-pill">◆ ${r.dissatisfaction==null?'—':formatNumber(r.dissatisfaction)}</span>`;
+      root.appendChild(div);
+    });
+  }
+
+  function renderMilestones(){
+    const root=$('#milestones');root.innerHTML='';
+    const items=[
+      {name:'ひらめき',current:state.resources.inspiration.current,target:state.resources.inspiration.target,accent:'var(--gold)'},
+      {name:'Sin',current:state.resources.sin.current,target:state.resources.sin.target,accent:'var(--violet)'}
+    ];
+    const plan=getPlan();
+    if(plan.need>0)items.push({name:'嫉妬計画用の不満',current:plan.owned,target:plan.need,accent:'var(--rose)'});
+    items.forEach(item=>{
+      const p=pct(item.current,item.target);
+      const checkpoints=[10,25,50,75,90,100];
+      const next=checkpoints.find(x=>x>p)??100;
+      const amount=item.target*next/100;
+      const div=document.createElement('div'); div.className='milestone';
+      div.innerHTML=`<div class="milestone-top"><span>${item.name} · 次は${next}%</span><span>${formatNumber(amount)}</span></div><div class="progress" style="--accent:${item.accent}"><i style="width:${p}%;background:var(--accent)"></i></div>`;
+      root.appendChild(div);
+    });
+  }
+
+  function renderRuns(){
+    $('#runCount').textContent=state.runs.length.toLocaleString('ja-JP');
+    const ia=average(validGains('inspiration'));
+    const da=average(validGains('dissatisfaction'));
+    const recent=average(validGains('inspiration').slice(-10));
+    $('#runInspAvg').textContent=ia?formatNumber(ia):'—';
+    $('#runDissAvg').textContent=da?formatNumber(da):'—';
+    $('#runRecentAvg').textContent=recent?`✦ ${formatNumber(recent)}`:'—';
+
+    const tbody=$('#runTableBody');tbody.innerHTML='';
+    let indexed=state.runs.map((r,i)=>({r,i}));
+    if(runFilter!=='all')indexed=indexed.slice(-Number(runFilter));
+    indexed.reverse();
+    if(!indexed.length){tbody.innerHTML='<tr><td colspan="7" style="color:#8e91a5;text-align:center;padding:32px">まだ記録がありません。</td></tr>';return;}
+    indexed.forEach(({r,i})=>{
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td>#${i+1}</td><td>${new Date(r.at).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</td><td>${r.inspiration==null?'—':formatNumber(r.inspiration)}</td><td>${r.sin==null?'—':formatNumber(r.sin)}</td><td>${r.dissatisfaction==null?'—':formatNumber(r.dissatisfaction)}</td><td class="memo">${escapeHtml(r.memo||'')}</td><td><button class="delete-row" data-delete-run="${i}" title="削除">×</button></td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderJealousy(){
+    const plan=getPlan();
+    $('#planNeedTotal').textContent=formatNumber(plan.need);
+    $('#planCurrentDiss').textContent=formatNumber(plan.owned);
+    $('#planShortfall').textContent=formatNumber(plan.shortfall);
+    $('#planRuns').textContent=plan.runs==null?'—':`${formatNumber(plan.runs,0)}周`;
+
+    const root=$('#jealousyGroups');root.innerHTML='';
+    const groups=[...new Set(state.jealousy.map(x=>x.group))];
+    groups.forEach(group=>{
+      const indices=state.jealousy.map((x,i)=>x.group===group?i:-1).filter(i=>i>=0);
+      const section=document.createElement('section');section.className='panel jealousy-group';
+      const groupNeed=indices.reduce((s,i)=>s+jealousyNeed(state.jealousy[i].current,state.jealousy[i].target),0);
+      section.innerHTML=`<div class="jealousy-group-head"><div><div class="eyebrow">${group.toUpperCase()}</div><h3>${group}</h3></div><span>必要不満 ${formatNumber(groupNeed)}</span></div>`;
+      indices.forEach(i=>{
+        const item=state.jealousy[i];
+        const need=jealousyNeed(item.current,item.target);
+        const row=document.createElement('div');row.className='jealousy-row';
+        row.innerHTML=`<div class="jealousy-name"><input data-j-name="${i}" value="${escapeAttr(item.name)}" aria-label="項目名"></div><input data-j-current="${i}" type="number" min="0" step="1" value="${Math.floor(item.current)}" aria-label="現在の嫉妬レベル"><span class="arrow">→</span><input data-j-target="${i}" type="number" min="0" step="1" value="${Math.floor(item.target)}" aria-label="目標の嫉妬レベル"><div class="need-cell">${formatNumber(need)}<small>不満</small></div>`;
+        section.appendChild(row);
+      });
+      root.appendChild(section);
+    });
+  }
+
+  function renderSettings(){
+    const insp=state.resources.inspiration,sin=state.resources.sin,diss=state.resources.dissatisfaction;
+    $('#setInspCurrent').value=formatPlain(insp.current); $('#setInspTarget').value=formatPlain(insp.target); $('#setInspBasis').value=insp.basis; $('#setInspManual').value=formatPlain(insp.manualAverage||0);
+    $('#setSinCurrent').value=formatPlain(sin.current); $('#setSinTarget').value=formatPlain(sin.target); $('#setSinDefault').value=formatPlain(sin.defaultGain);
+    $('#setDissCurrent').value=formatPlain(diss.current); $('#setDissBasis').value=diss.basis; $('#setDissManual').value=formatPlain(diss.manualAverage||0);
+    $('#inspManualWrap').style.display=insp.basis==='manual'?'block':'none';
+    $('#dissManualWrap').style.display=diss.basis==='manual'?'block':'none';
+  }
+
+  function formatPlain(n){return Number(n)||0}
+  function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
+  function escapeAttr(s){return escapeHtml(s).replace(/`/g,'&#096;')}
+
+  function showPage(name){
+    $$('.page').forEach(x=>x.classList.toggle('is-active',x.id===`page-${name}`));
+    $$('.tab').forEach(x=>x.classList.toggle('is-active',x.dataset.page===name));
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+
+  function toast(msg){
+    const el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),2200);
+  }
+
+  function openRunDialog(){
+    $('#runInspiration').value='';$('#runSin').value=state.resources.sin.defaultGain?formatPlain(state.resources.sin.defaultGain):'';$('#runDissatisfaction').value='';$('#runMemo').value='';
+    $('#runDialog').showModal();
+    setTimeout(()=>$('#runInspiration').focus(),40);
+  }
+
+  function saveRun(){
+    const insp=parseNumber($('#runInspiration').value), sin=parseNumber($('#runSin').value), diss=parseNumber($('#runDissatisfaction').value);
+    const supplied=[$('#runInspiration').value,$('#runSin').value,$('#runDissatisfaction').value].some(x=>String(x).trim());
+    if(!supplied){toast('少なくとも1つ獲得量を入力してください');return;}
+    if([['ひらめき',$('#runInspiration').value,insp],['Sin',$('#runSin').value,sin],['不満',$('#runDissatisfaction').value,diss]].some(([,raw,n])=>String(raw).trim() && (n==null || n<0))){toast('獲得量の入力を確認してください');return;}
+    const run={at:new Date().toISOString(),inspiration:insp,sin,dissatisfaction:diss,memo:$('#runMemo').value.trim()};
+    state.runs.push(run);
+    if(insp!=null)state.resources.inspiration.current+=insp;
+    if(sin!=null)state.resources.sin.current+=sin;
+    if(diss!=null)state.resources.dissatisfaction.current+=diss;
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+    $('#runDialog').close();renderAll();toast('CHRONICLE UPDATED · 周回を記録しました');
+  }
+
+  function bind(){
+    $$('.tab').forEach(btn=>btn.addEventListener('click',()=>showPage(btn.dataset.page)));
+    $$('[data-page-link]').forEach(btn=>btn.addEventListener('click',()=>showPage(btn.dataset.pageLink)));
+    $('#homeButton').addEventListener('click',()=>showPage('dashboard'));
+    $$('[data-open-run]').forEach(btn=>btn.addEventListener('click',openRunDialog));
+    $('#saveRun').addEventListener('click',saveRun);
+
+    $$('[data-edit-resource]').forEach(btn=>btn.addEventListener('click',()=>{
+      activeResource=btn.dataset.editResource;const r=state.resources[activeResource];
+      $('#resourceDialogTitle').textContent=activeResource==='inspiration'?'ひらめきを編集':'Sinを編集';
+      $('#resourceCurrentInput').value=formatPlain(r.current);$('#resourceTargetInput').value=formatPlain(r.target);$('#resourceDialog').showModal();
+    }));
+    $('#saveResource').addEventListener('click',()=>{
+      if(!activeResource)return;const c=parseNumber($('#resourceCurrentInput').value),t=parseNumber($('#resourceTargetInput').value);if(c==null||t==null||c<0||t<0){toast('数値を確認してください');return;}
+      state.resources[activeResource].current=c;state.resources[activeResource].target=t;$('#resourceDialog').close();saveState();toast('目標を更新しました');
+    });
+
+    $('#runFilter').addEventListener('click',e=>{const b=e.target.closest('button[data-filter]');if(!b)return;runFilter=b.dataset.filter;$$('#runFilter button').forEach(x=>x.classList.toggle('is-active',x===b));renderRuns();});
+    $('#runTableBody').addEventListener('click',e=>{const b=e.target.closest('[data-delete-run]');if(!b)return;const i=Number(b.dataset.deleteRun);if(!confirm(`#${i+1} の記録を削除しますか？\n※現在値は自動では巻き戻しません。`))return;state.runs.splice(i,1);saveState();toast('記録を削除しました');});
+    $('#clearRuns').addEventListener('click',()=>{if(!confirm('周回履歴をすべて削除しますか？\n現在のリソース値は残ります。'))return;state.runs=[];saveState();});
+
+    $('#jealousyGroups').addEventListener('change',e=>{
+      const name=e.target.dataset.jName,current=e.target.dataset.jCurrent,target=e.target.dataset.jTarget;
+      if(name!=null)state.jealousy[Number(name)].name=e.target.value.trim()||'名称未設定';
+      if(current!=null){const v=Math.max(0,Math.floor(Number(e.target.value)||0));state.jealousy[Number(current)].current=v;if(state.jealousy[Number(current)].target<v)state.jealousy[Number(current)].target=v;}
+      if(target!=null)state.jealousy[Number(target)].target=Math.max(0,Math.floor(Number(e.target.value)||0));
+      saveState();
+    });
+    $('#applyBulk').addEventListener('click',()=>{const v=Math.max(0,Math.floor(Number($('#bulkTarget').value)||0));state.jealousy.forEach(x=>x.target=v);saveState();toast(`全項目の目標を Lv${v} にしました`);});
+    $('#applyPlus').addEventListener('click',()=>{const v=Math.max(0,Math.floor(Number($('#bulkPlus').value)||0));state.jealousy.forEach(x=>x.target=(Number(x.current)||0)+v);saveState();toast(`全項目を現在値 +${v} Lv にしました`);});
+    $('#resetTargets').addEventListener('click',()=>{state.jealousy.forEach(x=>x.target=x.current);saveState();toast('目標を現在値に戻しました');});
+
+    const settingMap=[
+      ['setInspCurrent','inspiration','current'],['setInspTarget','inspiration','target'],['setInspManual','inspiration','manualAverage'],
+      ['setSinCurrent','sin','current'],['setSinTarget','sin','target'],['setSinDefault','sin','defaultGain'],
+      ['setDissCurrent','dissatisfaction','current'],['setDissManual','dissatisfaction','manualAverage']
+    ];
+    settingMap.forEach(([id,res,key])=>$('#'+id).addEventListener('change',e=>{const n=parseNumber(e.target.value);if(n==null||n<0){renderSettings();toast('数値を確認してください');return;}state.resources[res][key]=n;saveState();}));
+    $('#setInspBasis').addEventListener('change',e=>{state.resources.inspiration.basis=e.target.value;saveState();});
+    $('#setDissBasis').addEventListener('change',e=>{state.resources.dissatisfaction.basis=e.target.value;saveState();});
+
+    $('#exportData').addEventListener('click',()=>{
+      const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`your-chronicle-progress-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(a.href);toast('バックアップを書き出しました');
+    });
+    $('#importData').addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{const raw=JSON.parse(await file.text());state=mergeState(raw);saveState();toast('バックアップを読み込みました');}catch{toast('JSONを読み込めませんでした');}finally{e.target.value='';}});
+    $('#resetAll').addEventListener('click',()=>{if(!confirm('すべての設定・履歴を初期状態に戻します。よろしいですか？'))return;state=clone(defaultState);saveState();toast('初期状態に戻しました');});
+  }
+
+  bind();
+  renderAll();
+})();

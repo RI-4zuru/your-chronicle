@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b0d18" />
+  <title>Your Chronicle Progress Archive</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="ambient ambient-a"></div>
+  <div class="ambient ambient-b"></div>
+  <div class="grain"></div>
+
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand-wrap">
+        <button class="brand-mark" id="homeButton" aria-label="ダッシュボードへ">YC</button>
+        <div>
+          <div class="eyebrow">PERSONAL PROGRESS ARCHIVE</div>
+          <h1>Your Chronicle <span>周回記録</span></h1>
+        </div>
+      </div>
+      <div class="header-stats">
+        <div><span>総記録</span><strong id="headerRuns">0</strong></div>
+        <div><span>最終記録</span><strong id="headerLastRun">—</strong></div>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="ページ切り替え">
+      <button class="tab is-active" data-page="dashboard">ダッシュボード</button>
+      <button class="tab" data-page="runs">周回記録</button>
+      <button class="tab" data-page="jealousy">嫉妬プランナー</button>
+      <button class="tab" data-page="settings">設定</button>
+    </nav>
+
+    <main>
+      <section class="page is-active" id="page-dashboard">
+        <div class="hero panel">
+          <div>
+            <div class="eyebrow">NEXT CHRONICLE</div>
+            <h2>今日も、少しだけ年代記を進める。</h2>
+            <p>ひらめき・Sin・不満の3つだけを追跡。数字が積み上がるほど、次の目標が近づきます。</p>
+          </div>
+          <button class="primary big" data-open-run>今回の周回を記録</button>
+        </div>
+
+        <div class="resource-grid">
+          <article class="resource-card inspiration" data-resource="inspiration">
+            <div class="resource-head">
+              <div>
+                <span class="resource-symbol">✦</span>
+                <div><div class="eyebrow">HIRAMEKI</div><h3>ひらめき</h3></div>
+              </div>
+              <button class="ghost small" data-edit-resource="inspiration">編集</button>
+            </div>
+            <div class="big-number"><span id="inspirationCurrent">0</span><small> / <span id="inspirationTarget">0</span></small></div>
+            <div class="progress"><i id="inspirationBar"></i></div>
+            <div class="resource-meta"><span id="inspirationPercent">0%</span><span>残り <b id="inspirationRemaining">—</b></span></div>
+            <div class="stat-strip">
+              <div><span>計算平均</span><b id="inspirationAverage">—</b></div>
+              <div><span>残り周回</span><b id="inspirationRuns">—</b></div>
+              <div><span>計算基準</span><b id="inspirationBasis">—</b></div>
+            </div>
+          </article>
+
+          <article class="resource-card sin" data-resource="sin">
+            <div class="resource-head">
+              <div>
+                <span class="resource-symbol">◇</span>
+                <div><div class="eyebrow">SIN</div><h3>Sin</h3></div>
+              </div>
+              <button class="ghost small" data-edit-resource="sin">編集</button>
+            </div>
+            <div class="big-number"><span id="sinCurrent">0</span><small> / <span id="sinTarget">0</span></small></div>
+            <div class="progress"><i id="sinBar"></i></div>
+            <div class="resource-meta"><span id="sinPercent">0%</span><span>残り <b id="sinRemaining">—</b></span></div>
+            <div class="stat-strip">
+              <div><span>1周獲得</span><b id="sinAverage">—</b></div>
+              <div><span>残り周回</span><b id="sinRuns">—</b></div>
+              <div><span>既定値</span><b id="sinDefault">42</b></div>
+            </div>
+          </article>
+
+          <article class="resource-card dissatisfaction" data-resource="dissatisfaction">
+            <div class="resource-head">
+              <div>
+                <span class="resource-symbol">◆</span>
+                <div><div class="eyebrow">DISSATISFACTION</div><h3>不満</h3></div>
+              </div>
+              <button class="ghost small" data-page-link="jealousy">嫉妬計画</button>
+            </div>
+            <div class="big-number"><span id="dissCurrent">0</span><small> 所持</small></div>
+            <div class="progress"><i id="dissBar"></i></div>
+            <div class="resource-meta"><span id="dissPlanPercent">計画なし</span><span>必要 <b id="dissNeeded">—</b></span></div>
+            <div class="stat-strip">
+              <div><span>計算平均</span><b id="dissAverage">—</b></div>
+              <div><span>残り周回</span><b id="dissRuns">—</b></div>
+              <div><span>目標Lv合計</span><b id="jealousyTargetTotal">—</b></div>
+            </div>
+          </article>
+        </div>
+
+        <div class="dashboard-lower">
+          <section class="panel recent-panel">
+            <div class="section-head"><div><div class="eyebrow">RECENT RUNS</div><h3>最近の周回</h3></div><button class="ghost small" data-page-link="runs">すべて見る</button></div>
+            <div id="recentRuns" class="recent-runs"></div>
+          </section>
+
+          <section class="panel milestone-panel">
+            <div class="section-head"><div><div class="eyebrow">MILESTONES</div><h3>次の節目</h3></div></div>
+            <div id="milestones" class="milestones"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="page" id="page-runs">
+        <div class="page-title">
+          <div><div class="eyebrow">RUN LOG</div><h2>周回記録</h2><p>1周分の実獲得量を記録。空欄のリソースは更新しません。</p></div>
+          <button class="primary" data-open-run>＋ 周回を記録</button>
+        </div>
+
+        <div class="stats-grid">
+          <div class="mini-card"><span>記録数</span><b id="runCount">0</b></div>
+          <div class="mini-card"><span>ひらめき・全平均</span><b id="runInspAvg">—</b></div>
+          <div class="mini-card"><span>不満・全平均</span><b id="runDissAvg">—</b></div>
+          <div class="mini-card"><span>直近10周</span><b id="runRecentAvg">—</b></div>
+        </div>
+
+        <section class="panel run-table-panel">
+          <div class="table-tools">
+            <div class="segmented" id="runFilter">
+              <button class="is-active" data-filter="all">すべて</button>
+              <button data-filter="30">直近30</button>
+              <button data-filter="10">直近10</button>
+            </div>
+            <button class="danger ghost small" id="clearRuns">履歴を全削除</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>#</th><th>日時</th><th>ひらめき</th><th>Sin</th><th>不満</th><th>メモ</th><th></th></tr></thead>
+              <tbody id="runTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="page" id="page-jealousy">
+        <div class="page-title">
+          <div><div class="eyebrow">JEALOUSY PLANNER</div><h2>嫉妬プランナー</h2><p><strong>見るのは「嫉妬レベル」</strong>です。ルーティンLvは使いません。現在Lv・目標Lvはすべて自由入力できます。</p></div>
+          <div class="planner-actions"><button class="ghost" id="resetTargets">目標を現在値に戻す</button><button class="primary" id="applyBulk">一括目標を適用</button></div>
+        </div>
+
+        <section class="panel planner-summary">
+          <div class="summary-main">
+            <div><span>必要不満 合計</span><strong id="planNeedTotal">0</strong></div>
+            <div><span>現在所持</span><strong id="planCurrentDiss">0</strong></div>
+            <div><span>不足分</span><strong id="planShortfall">0</strong></div>
+            <div><span>推定残り周回</span><strong id="planRuns">—</strong></div>
+          </div>
+          <div class="bulk-row">
+            <label>全項目を <input id="bulkTarget" type="number" min="0" step="1" value="400"> Lvまで</label>
+            <span>または</span>
+            <label>現在より <input id="bulkPlus" type="number" min="0" step="1" value="100"> Lv上げる</label>
+            <button class="ghost small" id="applyPlus">＋指定を適用</button>
+          </div>
+          <div class="formula-note">通常項目の不満消費は、Lv0→1が10、その後はLv1→2が1.0、Lv2→3が1.1…として計算します。端数も保持して計算します。</div>
+        </section>
+
+        <div id="jealousyGroups" class="jealousy-groups"></div>
+      </section>
+
+      <section class="page" id="page-settings">
+        <div class="page-title"><div><div class="eyebrow">SETTINGS</div><h2>設定</h2><p>計算方法・初期値・バックアップを管理します。</p></div></div>
+
+        <div class="settings-grid">
+          <section class="panel settings-card">
+            <h3>ひらめき</h3>
+            <label>現在値<input id="setInspCurrent" data-number-input type="text"></label>
+            <label>目標値<input id="setInspTarget" data-number-input type="text"></label>
+            <label>残り周回の計算基準
+              <select id="setInspBasis">
+                <option value="all">全履歴平均</option>
+                <option value="50">直近50周</option>
+                <option value="25">直近25周</option>
+                <option value="10">直近10周</option>
+                <option value="5">直近5周</option>
+                <option value="manual">手入力</option>
+              </select>
+            </label>
+            <label id="inspManualWrap">手入力の1周平均<input id="setInspManual" data-number-input type="text"></label>
+          </section>
+
+          <section class="panel settings-card">
+            <h3>Sin</h3>
+            <label>現在値<input id="setSinCurrent" data-number-input type="text"></label>
+            <label>目標値<input id="setSinTarget" data-number-input type="text"></label>
+            <label>既定の1周獲得量<input id="setSinDefault" data-number-input type="text"></label>
+            <p class="hint">周回記録に実測値がある場合でも、Sinはこの既定値を残り周回計算に使えます。</p>
+          </section>
+
+          <section class="panel settings-card">
+            <h3>不満</h3>
+            <label>現在所持<input id="setDissCurrent" data-number-input type="text"></label>
+            <label>残り周回の計算基準
+              <select id="setDissBasis">
+                <option value="all">全履歴平均</option>
+                <option value="50">直近50周</option>
+                <option value="25">直近25周</option>
+                <option value="10">直近10周</option>
+                <option value="5">直近5周</option>
+                <option value="manual">手入力</option>
+              </select>
+            </label>
+            <label id="dissManualWrap">手入力の1周平均<input id="setDissManual" data-number-input type="text"></label>
+          </section>
+
+          <section class="panel settings-card backup-card">
+            <h3>バックアップ</h3>
+            <p>データはこのブラウザ内に保存されます。定期的にJSONを書き出しておくと安心です。</p>
+            <div class="stack-buttons">
+              <button class="ghost" id="exportData">JSONを書き出す</button>
+              <label class="file-button ghost">JSONを読み込む<input id="importData" type="file" accept="application/json,.json"></label>
+              <button class="danger ghost" id="resetAll">初期状態に戻す</button>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <footer>YOUR CHRONICLE PROGRESS ARCHIVE · GitHub Pages ready · data stored locally</footer>
+  </div>
+
+  <dialog id="runDialog">
+    <form method="dialog" id="runForm" class="dialog-card">
+      <div class="dialog-head"><div><div class="eyebrow">NEW RUN</div><h2>今回の周回を記録</h2></div><button class="icon-button" value="cancel" aria-label="閉じる">×</button></div>
+      <p class="dialog-help">今回増えた量を入力してください。空欄はそのリソースを更新しません。K / M / B / T 表記も使えます。</p>
+      <div class="run-input-grid">
+        <label class="gain inspiration"><span>✦ ひらめき</span><input id="runInspiration" type="text" inputmode="decimal" placeholder="例: 2.48K"></label>
+        <label class="gain sin"><span>◇ Sin</span><input id="runSin" type="text" inputmode="decimal" placeholder="42"></label>
+        <label class="gain dissatisfaction"><span>◆ 不満</span><input id="runDissatisfaction" type="text" inputmode="decimal" placeholder="例: 2.30K"></label>
+      </div>
+      <label>メモ<input id="runMemo" type="text" maxlength="80" placeholder="任意"></label>
+      <div class="dialog-actions"><button class="ghost" value="cancel">キャンセル</button><button type="button" class="primary" id="saveRun">年代記に記録</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="resourceDialog">
+    <form method="dialog" class="dialog-card compact">
+      <div class="dialog-head"><div><div class="eyebrow">RESOURCE</div><h2 id="resourceDialogTitle">編集</h2></div><button class="icon-button" value="cancel">×</button></div>
+      <label>現在値<input id="resourceCurrentInput" type="text" inputmode="decimal"></label>
+      <label>目標値<input id="resourceTargetInput" type="text" inputmode="decimal"></label>
+      <div class="dialog-actions"><button class="ghost" value="cancel">キャンセル</button><button type="button" class="primary" id="saveResource">保存</button></div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
