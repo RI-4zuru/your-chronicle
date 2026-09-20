@@ -158,3 +158,8 @@ dialog{border-radius:16px}
 @media(max-width:640px){
   .run-meta-grid{grid-template-columns:1fr}
 }
+
+/* v5: run duration is entered as minutes */
+.input-with-unit{display:flex;align-items:center;gap:8px}
+.input-with-unit input{flex:1;min-width:0}
+.input-with-unit span{color:var(--muted);font-size:.88rem;white-space:nowrap}

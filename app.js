@@ -85,46 +85,16 @@
     if (value == null) return null;
     const raw = String(value).trim();
     if (!raw) return null;
-    const s = raw.replace(/\s+/g,'').replace(/：/g,':').toLowerCase();
+    const minutes = Number(raw);
+    if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 60) return null;
+    return minutes * 60;
+  }
 
-    // h:mm:ss / mm:ss
-    if (/^\d+(?::\d{1,2}){1,2}$/.test(s)) {
-      const parts = s.split(':').map(Number);
-      if (parts.some(n => !Number.isFinite(n))) return null;
-      if (parts.length === 2) {
-        const [m,sec] = parts;
-        if (sec >= 60) return null;
-        return m * 60 + sec;
-      }
-      const [h,m,sec] = parts;
-      if (m >= 60 || sec >= 60) return null;
-      return h * 3600 + m * 60 + sec;
-    }
-
-    // Japanese / unit-suffixed forms: 1時間5分30秒, 12.5分, 90秒, 1.2h, 15m, 30s
-    let total = 0;
-    let matched = false;
-    const patterns = [
-      [/([+-]?\d*\.?\d+)(?:時間|hours?|hrs?|h)/g, 3600],
-      [/([+-]?\d*\.?\d+)(?:分|minutes?|mins?|m)/g, 60],
-      [/([+-]?\d*\.?\d+)(?:秒|seconds?|secs?|s)/g, 1]
-    ];
-    let rest = s;
-    for (const [re,mult] of patterns) {
-      rest = rest.replace(re, (_,n) => {
-        const v = Number(n);
-        if (Number.isFinite(v)) { total += v * mult; matched = true; }
-        return '';
-      });
-    }
-    if (matched && !rest) return total > 0 ? total : null;
-
-    // Bare number = minutes (most convenient for one-run timing)
-    if (/^\d*\.?\d+$/.test(s)) {
-      const minutes = Number(s);
-      return Number.isFinite(minutes) && minutes > 0 ? minutes * 60 : null;
-    }
-    return null;
+  function formatRunMinutes(seconds){
+    const minutes = Number(seconds) / 60;
+    if (!Number.isFinite(minutes) || minutes <= 0) return '—';
+    const rounded = Math.round(minutes * 10) / 10;
+    return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}分`;
   }
 
   function validDurations(){
@@ -134,25 +104,20 @@
   function averageDuration(){ return average(validDurations()); }
 
   function formatDuration(seconds){
-    const total = Math.max(0, Math.round(Number(seconds)||0));
-    if (!total) return '—';
-    const h = Math.floor(total / 3600);
-    const m = Math.floor((total % 3600) / 60);
-    const sec = total % 60;
-    if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
-    return `${m}:${String(sec).padStart(2,'0')}`;
+    return formatRunMinutes(seconds);
   }
 
   function formatEstimatedTime(seconds){
-    const total = Math.max(0, Math.round(Number(seconds)||0));
-    if (!total) return '—';
-    const day = Math.floor(total / 86400);
-    const hour = Math.floor((total % 86400) / 3600);
-    const min = Math.floor((total % 3600) / 60);
-    if (day > 0) return `${day}日 ${hour}時間`;
-    if (hour > 0) return `${hour}時間 ${min}分`;
-    if (min > 0) return `${min}分`;
-    return `${total}秒`;
+    const totalHours = Number(seconds) / 3600;
+    if (!Number.isFinite(totalHours) || totalHours <= 0) return '—';
+    if (totalHours < 24) {
+      const h = Math.round(totalHours * 10) / 10;
+      return `${Number.isInteger(h) ? h.toFixed(0) : h.toFixed(1)}時間`;
+    }
+    const days = Math.floor(totalHours / 24);
+    const remainHours = Math.round((totalHours - days * 24) * 10) / 10;
+    if (remainHours <= 0) return `${days}日`;
+    return `${days}日 ${Number.isInteger(remainHours) ? remainHours.toFixed(0) : remainHours.toFixed(1)}時間`;
   }
 
   function toLocalDateTimeValue(value){
@@ -417,8 +382,8 @@
     $('#runDialogTitle').textContent = editing ? `周回記録 #${editingRunIndex+1} を編集` : '今回の周回を記録';
     $('#saveRun').textContent = editing ? '変更を保存' : '年代記に記録';
     $('#runDialogHelp').textContent = editing
-      ? '日時・周回時間・獲得量・メモを修正できます。獲得量の変更は現在の所持量にも差分反映します。周回時間が空欄の記録は平均時間から除外します。'
-      : '今回増えた量を入力してください。周回時間は任意です。時間を入力した記録だけで平均周回時間と推定所要時間を計算します。';
+      ? '日時・1周の時間・獲得量・メモを修正できます。1周の時間は分単位（最大60分）で、空欄の記録は平均時間から除外します。獲得量の変更は現在の所持量にも差分反映します。'
+      : '今回増えた量を入力してください。1周の時間は分単位（最大60分）で任意です。時間を入力した記録だけで平均周回時間と推定所要時間を計算します。';
   }
 
   function openRunDialog(){
@@ -433,7 +398,7 @@
     if(!run)return;
     setRunDialogMode(index);
     $('#runAt').value=toLocalDateTimeValue(run.at);
-    $('#runDuration').value=run.durationSeconds?formatDuration(run.durationSeconds):'';
+    $('#runDuration').value=run.durationSeconds?String(Math.round((Number(run.durationSeconds)/60)*10)/10):'';
     $('#runInspiration').value=run.inspiration==null?'':formatPlain(run.inspiration);
     $('#runSin').value=run.sin==null?'':formatPlain(run.sin);
     $('#runDissatisfaction').value=run.dissatisfaction==null?'':formatPlain(run.dissatisfaction);
@@ -448,7 +413,7 @@
     const durationRaw=$('#runDuration').value;
     const durationSeconds=parseDuration(durationRaw);
     if(!at){toast('日時を確認してください');return;}
-    if(String(durationRaw).trim() && (!durationSeconds || durationSeconds<=0)){toast('周回時間を確認してください（例: 12:30 / 90秒 / 12.5分）');return;}
+    if(String(durationRaw).trim() && (!durationSeconds || durationSeconds<=0)){toast('1周の時間は0より大きく60分以下で入力してください');return;}
     const supplied=[$('#runInspiration').value,$('#runSin').value,$('#runDissatisfaction').value].some(x=>String(x).trim());
     if(!supplied){toast('少なくとも1つ獲得量を入力してください');return;}
     if([['ひらめき',$('#runInspiration').value,insp],['Sin',$('#runSin').value,sin],['不満',$('#runDissatisfaction').value,diss]].some(([,raw,n])=>String(raw).trim() && (n==null || n<0))){toast('獲得量の入力を確認してください');return;}
