@@ -124,3 +124,8 @@ dialog{border-radius:16px}
   .page-title>.primary,.planner-actions{margin-top:9px}
   .settings-card{padding:13px}
 }
+
+/* v3: editable run history */
+.row-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px}
+.edit-row{border:1px solid var(--line);background:rgba(255,255,255,.035);color:var(--muted);border-radius:8px;padding:4px 8px;font-size:11px}
+.edit-row:hover{color:var(--text);border-color:rgba(169,141,255,.5);background:rgba(169,141,255,.09)}

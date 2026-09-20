@@ -228,8 +228,8 @@
 
   <dialog id="runDialog">
     <form method="dialog" id="runForm" class="dialog-card">
-      <div class="dialog-head"><div><div class="eyebrow">NEW RUN</div><h2>今回の周回を記録</h2></div><button class="icon-button" value="cancel" aria-label="閉じる">×</button></div>
-      <p class="dialog-help">今回増えた量を入力してください。空欄はそのリソースを更新しません。K / M / B / T 表記も使えます。</p>
+      <div class="dialog-head"><div><div class="eyebrow" id="runDialogEyebrow">NEW RUN</div><h2 id="runDialogTitle">今回の周回を記録</h2></div><button class="icon-button" value="cancel" aria-label="閉じる">×</button></div>
+      <p class="dialog-help" id="runDialogHelp">今回増えた量を入力してください。空欄はそのリソースを更新しません。K / M / B / T 表記も使えます。</p>
       <div class="run-input-grid">
         <label class="gain inspiration"><span>✦ ひらめき</span><input id="runInspiration" type="text" inputmode="decimal" placeholder="例: 2.48K"></label>
         <label class="gain sin"><span>◇ Sin</span><input id="runSin" type="text" inputmode="decimal" placeholder="42"></label>

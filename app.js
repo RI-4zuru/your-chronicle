@@ -41,6 +41,7 @@
   let state = loadState();
   let activeResource = null;
   let runFilter = 'all';
+  let editingRunIndex = null;
 
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -258,7 +259,7 @@
     if(!indexed.length){tbody.innerHTML='<tr><td colspan="7" style="color:#8e91a5;text-align:center;padding:32px">まだ記録がありません。</td></tr>';return;}
     indexed.forEach(({r,i})=>{
       const tr=document.createElement('tr');
-      tr.innerHTML=`<td>#${i+1}</td><td>${new Date(r.at).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</td><td>${r.inspiration==null?'—':formatNumber(r.inspiration)}</td><td>${r.sin==null?'—':formatNumber(r.sin)}</td><td>${r.dissatisfaction==null?'—':formatNumber(r.dissatisfaction)}</td><td class="memo">${escapeHtml(r.memo||'')}</td><td><button class="delete-row" data-delete-run="${i}" title="削除">×</button></td>`;
+      tr.innerHTML=`<td>#${i+1}</td><td>${new Date(r.at).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</td><td>${r.inspiration==null?'—':formatNumber(r.inspiration)}</td><td>${r.sin==null?'—':formatNumber(r.sin)}</td><td>${r.dissatisfaction==null?'—':formatNumber(r.dissatisfaction)}</td><td class="memo">${escapeHtml(r.memo||'')}</td><td><div class="row-actions"><button class="edit-row" data-edit-run="${i}" title="編集">編集</button><button class="delete-row" data-delete-run="${i}" title="削除">×</button></div></td>`;
       tbody.appendChild(tr);
     });
   }
@@ -311,8 +312,32 @@
     const el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),2200);
   }
 
+  function setRunDialogMode(index=null){
+    editingRunIndex = Number.isInteger(index) ? index : null;
+    const editing = editingRunIndex !== null;
+    $('#runDialogEyebrow').textContent = editing ? 'EDIT RUN' : 'NEW RUN';
+    $('#runDialogTitle').textContent = editing ? `周回記録 #${editingRunIndex+1} を編集` : '今回の周回を記録';
+    $('#saveRun').textContent = editing ? '変更を保存' : '年代記に記録';
+    $('#runDialogHelp').textContent = editing
+      ? '獲得量やメモを修正できます。獲得量を変更すると、現在の所持量にも差分を自動反映します。空欄は「記録なし」として扱います。'
+      : '今回増えた量を入力してください。空欄はそのリソースを更新しません。K / M / B / T 表記も使えます。';
+  }
+
   function openRunDialog(){
+    setRunDialogMode(null);
     $('#runInspiration').value='';$('#runSin').value=state.resources.sin.defaultGain?formatPlain(state.resources.sin.defaultGain):'';$('#runDissatisfaction').value='';$('#runMemo').value='';
+    $('#runDialog').showModal();
+    setTimeout(()=>$('#runInspiration').focus(),40);
+  }
+
+  function openEditRunDialog(index){
+    const run=state.runs[index];
+    if(!run)return;
+    setRunDialogMode(index);
+    $('#runInspiration').value=run.inspiration==null?'':formatPlain(run.inspiration);
+    $('#runSin').value=run.sin==null?'':formatPlain(run.sin);
+    $('#runDissatisfaction').value=run.dissatisfaction==null?'':formatPlain(run.dissatisfaction);
+    $('#runMemo').value=run.memo||'';
     $('#runDialog').showModal();
     setTimeout(()=>$('#runInspiration').focus(),40);
   }
@@ -322,6 +347,24 @@
     const supplied=[$('#runInspiration').value,$('#runSin').value,$('#runDissatisfaction').value].some(x=>String(x).trim());
     if(!supplied){toast('少なくとも1つ獲得量を入力してください');return;}
     if([['ひらめき',$('#runInspiration').value,insp],['Sin',$('#runSin').value,sin],['不満',$('#runDissatisfaction').value,diss]].some(([,raw,n])=>String(raw).trim() && (n==null || n<0))){toast('獲得量の入力を確認してください');return;}
+
+    if(editingRunIndex!==null){
+      const old=state.runs[editingRunIndex];
+      if(!old){toast('編集する記録が見つかりません');return;}
+      const next={...old,inspiration:insp,sin,dissatisfaction:diss,memo:$('#runMemo').value.trim()};
+      const delta=(a,b)=>(Number(b)||0)-(Number(a)||0);
+      state.resources.inspiration.current=Math.max(0,(Number(state.resources.inspiration.current)||0)+delta(old.inspiration,next.inspiration));
+      state.resources.sin.current=Math.max(0,(Number(state.resources.sin.current)||0)+delta(old.sin,next.sin));
+      state.resources.dissatisfaction.current=Math.max(0,(Number(state.resources.dissatisfaction.current)||0)+delta(old.dissatisfaction,next.dissatisfaction));
+      state.runs[editingRunIndex]=next;
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+      $('#runDialog').close();
+      editingRunIndex=null;
+      renderAll();
+      toast('周回記録を更新しました');
+      return;
+    }
+
     const run={at:new Date().toISOString(),inspiration:insp,sin,dissatisfaction:diss,memo:$('#runMemo').value.trim()};
     state.runs.push(run);
     if(insp!=null)state.resources.inspiration.current+=insp;
@@ -349,7 +392,15 @@
     });
 
     $('#runFilter').addEventListener('click',e=>{const b=e.target.closest('button[data-filter]');if(!b)return;runFilter=b.dataset.filter;$$('#runFilter button').forEach(x=>x.classList.toggle('is-active',x===b));renderRuns();});
-    $('#runTableBody').addEventListener('click',e=>{const b=e.target.closest('[data-delete-run]');if(!b)return;const i=Number(b.dataset.deleteRun);if(!confirm(`#${i+1} の記録を削除しますか？\n※現在値は自動では巻き戻しません。`))return;state.runs.splice(i,1);saveState();toast('記録を削除しました');});
+    $('#runTableBody').addEventListener('click',e=>{
+      const edit=e.target.closest('[data-edit-run]');
+      if(edit){openEditRunDialog(Number(edit.dataset.editRun));return;}
+      const b=e.target.closest('[data-delete-run]');
+      if(!b)return;
+      const i=Number(b.dataset.deleteRun);
+      if(!confirm(`#${i+1} の記録を削除しますか？\n※現在値は自動では巻き戻しません。`))return;
+      state.runs.splice(i,1);saveState();toast('記録を削除しました');
+    });
     $('#clearRuns').addEventListener('click',()=>{if(!confirm('周回履歴をすべて削除しますか？\n現在のリソース値は残ります。'))return;state.runs=[];saveState();});
 
     $('#jealousyGroups').addEventListener('change',e=>{
