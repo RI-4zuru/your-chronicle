@@ -381,15 +381,64 @@
     $('#runDialogTitle').textContent = editing ? `周回記録 #${editingRunIndex+1} を編集` : '今回の周回を記録';
     $('#saveRun').textContent = editing ? '変更を保存' : '年代記に記録';
     $('#runDialogHelp').textContent = editing
-      ? '日時・1周の時間・獲得量・メモを修正できます。1周の時間は1〜60分の整数で、空欄の記録は平均時間から除外します。獲得量の変更は現在の所持量にも差分反映します。'
-      : '今回増えた量を入力してください。1周の時間は1〜60分の整数で任意です。時間を入力した記録だけで平均周回時間と推定所要時間を計算します。';
+      ? '日時・1周の時間・獲得量・メモを修正できます。ひらめきは1周の中で複数回入力でき、その合計をこの周回の獲得量として扱います。時間が空欄の記録は平均時間から除外します。'
+      : 'ひらめきは1周の中で何度でも追加できます。入力したひらめきの合計が、その周回の獲得量になります。1周の時間は1〜60分の整数で任意です。';
+  }
+
+  function getInspirationEntryData(){
+    const inputs=$$('#inspirationEntries [data-inspiration-entry]');
+    const values=[];
+    let invalid=false;
+    for(const input of inputs){
+      const raw=String(input.value||'').trim();
+      if(!raw)continue;
+      const n=parseNumber(raw);
+      if(n==null || n<0){invalid=true;continue;}
+      values.push(n);
+    }
+    return {values,total:values.length?values.reduce((a,b)=>a+b,0):null,invalid};
+  }
+
+  function updateInspirationTotal(){
+    const data=getInspirationEntryData();
+    const wrap=$('.inspiration-total');
+    wrap.classList.toggle('is-invalid',data.invalid);
+    $('#runInspirationTotal').textContent=data.invalid?'入力確認':(data.total==null?'—':formatNumber(data.total));
+  }
+
+  function addInspirationEntry(value=''){
+    const root=$('#inspirationEntries');
+    const row=document.createElement('div');
+    row.className='inspiration-entry-row';
+    row.innerHTML=`<input type="text" inputmode="decimal" data-inspiration-entry placeholder="例: 2.48K"><button type="button" class="inspiration-entry-remove" title="削除" aria-label="ひらめき入力を削除">×</button>`;
+    row.querySelector('input').value=value==null?'':String(value);
+    root.appendChild(row);
+    updateInspirationTotal();
+    return row.querySelector('input');
+  }
+
+  function setInspirationEntries(values){
+    const root=$('#inspirationEntries');
+    root.innerHTML='';
+    const list=Array.isArray(values)&&values.length?values:[''];
+    list.forEach(v=>addInspirationEntry(v));
+    updateInspirationTotal();
+  }
+
+  function focusFirstInspiration(){
+    setTimeout(()=>$('#inspirationEntries [data-inspiration-entry]')?.focus(),40);
   }
 
   function openRunDialog(){
     setRunDialogMode(null);
-    $('#runAt').value=toLocalDateTimeValue();$('#runDuration').value='';$('#runInspiration').value='';$('#runSin').value=state.resources.sin.defaultGain?formatPlain(state.resources.sin.defaultGain):'';$('#runDissatisfaction').value='';$('#runMemo').value='';
+    $('#runAt').value=toLocalDateTimeValue();
+    $('#runDuration').value='';
+    setInspirationEntries(['']);
+    $('#runSin').value=state.resources.sin.defaultGain?formatPlain(state.resources.sin.defaultGain):'';
+    $('#runDissatisfaction').value='';
+    $('#runMemo').value='';
     $('#runDialog').showModal();
-    setTimeout(()=>$('#runInspiration').focus(),40);
+    focusFirstInspiration();
   }
 
   function openEditRunDialog(index){
@@ -398,29 +447,35 @@
     setRunDialogMode(index);
     $('#runAt').value=toLocalDateTimeValue(run.at);
     $('#runDuration').value=run.durationSeconds?String(Math.round(Number(run.durationSeconds)/60)):'';
-    $('#runInspiration').value=run.inspiration==null?'':formatPlain(run.inspiration);
+    const entries=Array.isArray(run.inspirationEntries) && run.inspirationEntries.length
+      ? run.inspirationEntries
+      : (run.inspiration==null?['']:[run.inspiration]);
+    setInspirationEntries(entries.map(formatPlain));
     $('#runSin').value=run.sin==null?'':formatPlain(run.sin);
     $('#runDissatisfaction').value=run.dissatisfaction==null?'':formatPlain(run.dissatisfaction);
     $('#runMemo').value=run.memo||'';
     $('#runDialog').showModal();
-    setTimeout(()=>$('#runInspiration').focus(),40);
+    focusFirstInspiration();
   }
 
   function saveRun(){
-    const insp=parseNumber($('#runInspiration').value), sin=parseNumber($('#runSin').value), diss=parseNumber($('#runDissatisfaction').value);
+    const inspData=getInspirationEntryData();
+    const insp=inspData.total;
+    const sin=parseNumber($('#runSin').value), diss=parseNumber($('#runDissatisfaction').value);
     const at=parseLocalDateTime($('#runAt').value);
     const durationRaw=$('#runDuration').value;
     const durationSeconds=parseDuration(durationRaw);
     if(!at){toast('日時を確認してください');return;}
     if(String(durationRaw).trim() && (!durationSeconds || durationSeconds<=0)){toast('1周の時間は1〜60分の整数で入力してください');return;}
-    const supplied=[$('#runInspiration').value,$('#runSin').value,$('#runDissatisfaction').value].some(x=>String(x).trim());
+    if(inspData.invalid){toast('ひらめきの入力を確認してください');return;}
+    const supplied=inspData.values.length>0 || [$('#runSin').value,$('#runDissatisfaction').value].some(x=>String(x).trim());
     if(!supplied){toast('少なくとも1つ獲得量を入力してください');return;}
-    if([['ひらめき',$('#runInspiration').value,insp],['Sin',$('#runSin').value,sin],['不満',$('#runDissatisfaction').value,diss]].some(([,raw,n])=>String(raw).trim() && (n==null || n<0))){toast('獲得量の入力を確認してください');return;}
+    if([['Sin',$('#runSin').value,sin],['不満',$('#runDissatisfaction').value,diss]].some(([,raw,n])=>String(raw).trim() && (n==null || n<0))){toast('獲得量の入力を確認してください');return;}
 
     if(editingRunIndex!==null){
       const old=state.runs[editingRunIndex];
       if(!old){toast('編集する記録が見つかりません');return;}
-      const next={...old,at,durationSeconds:durationSeconds||null,inspiration:insp,sin,dissatisfaction:diss,memo:$('#runMemo').value.trim()};
+      const next={...old,at,durationSeconds:durationSeconds||null,inspirationEntries:inspData.values,inspiration:insp,sin,dissatisfaction:diss,memo:$('#runMemo').value.trim()};
       const delta=(a,b)=>(Number(b)||0)-(Number(a)||0);
       state.resources.inspiration.current=Math.max(0,(Number(state.resources.inspiration.current)||0)+delta(old.inspiration,next.inspiration));
       state.resources.sin.current=Math.max(0,(Number(state.resources.sin.current)||0)+delta(old.sin,next.sin));
@@ -434,7 +489,7 @@
       return;
     }
 
-    const run={at,durationSeconds:durationSeconds||null,inspiration:insp,sin,dissatisfaction:diss,memo:$('#runMemo').value.trim()};
+    const run={at,durationSeconds:durationSeconds||null,inspirationEntries:inspData.values,inspiration:insp,sin,dissatisfaction:diss,memo:$('#runMemo').value.trim()};
     state.runs.push(run);
     if(insp!=null)state.resources.inspiration.current+=insp;
     if(sin!=null)state.resources.sin.current+=sin;
@@ -449,6 +504,16 @@
     $('#homeButton').addEventListener('click',()=>showPage('dashboard'));
     $$('[data-open-run]').forEach(btn=>btn.addEventListener('click',openRunDialog));
     $('#saveRun').addEventListener('click',saveRun);
+    $('#addInspirationEntry').addEventListener('click',()=>{const input=addInspirationEntry('');input.focus();});
+    $('#inspirationEntries').addEventListener('input',updateInspirationTotal);
+    $('#inspirationEntries').addEventListener('click',e=>{
+      const b=e.target.closest('.inspiration-entry-remove');
+      if(!b)return;
+      const row=b.closest('.inspiration-entry-row');
+      const rows=$$('.inspiration-entry-row',$('#inspirationEntries'));
+      if(rows.length<=1){row.querySelector('input').value='';updateInspirationTotal();row.querySelector('input').focus();return;}
+      row.remove();updateInspirationTotal();
+    });
 
     $$('[data-edit-resource]').forEach(btn=>btn.addEventListener('click',()=>{
       activeResource=btn.dataset.editResource;const r=state.resources[activeResource];

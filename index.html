@@ -240,7 +240,11 @@
         <label>1周の時間 <small>任意・分</small><div class="input-with-unit"><input id="runDuration" type="number" inputmode="numeric" min="1" max="60" step="1" placeholder="例: 12"><span>分</span></div></label>
       </div>
       <div class="run-input-grid">
-        <label class="gain inspiration"><span>✦ ひらめき</span><input id="runInspiration" type="text" inputmode="decimal" placeholder="例: 2.48K"></label>
+        <div class="gain inspiration inspiration-multi">
+          <div class="gain-title-row"><span>✦ ひらめき</span><button type="button" class="mini-add" id="addInspirationEntry">＋追加</button></div>
+          <div id="inspirationEntries" class="inspiration-entry-list"></div>
+          <div class="inspiration-total"><span>1周合計</span><b id="runInspirationTotal">—</b></div>
+        </div>
         <label class="gain sin"><span>◇ Sin</span><input id="runSin" type="text" inputmode="decimal" placeholder="42"></label>
         <label class="gain dissatisfaction"><span>◆ 不満</span><input id="runDissatisfaction" type="text" inputmode="decimal" placeholder="例: 2.30K"></label>
       </div>

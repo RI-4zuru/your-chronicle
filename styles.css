@@ -163,3 +163,21 @@ dialog{border-radius:16px}
 .input-with-unit{display:flex;align-items:center;gap:8px}
 .input-with-unit input{flex:1;min-width:0}
 .input-with-unit span{color:var(--muted);font-size:.88rem;white-space:nowrap}
+
+/* v7: multiple inspiration gains inside a single run */
+.run-input-grid{grid-template-columns:1.35fr 1fr 1fr;align-items:start}
+.inspiration-multi{display:block}
+.gain-title-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px}
+.gain-title-row>span{margin-bottom:0!important}
+.mini-add{border:1px solid rgba(232,199,124,.24);background:rgba(232,199,124,.07);color:var(--gold);border-radius:7px;padding:3px 7px;font-size:10px;line-height:1.2}
+.mini-add:hover{background:rgba(232,199,124,.12)}
+.inspiration-entry-list{display:grid;gap:5px}
+.inspiration-entry-row{display:grid;grid-template-columns:minmax(0,1fr) 25px;gap:5px;align-items:center}
+.inspiration-entry-row input{margin-top:0!important}
+.inspiration-entry-remove{width:25px;height:30px;padding:0;border:1px solid var(--line);border-radius:7px;background:rgba(255,255,255,.025);color:#85889a;font-size:15px;line-height:1}
+.inspiration-entry-remove:hover{color:var(--danger);border-color:rgba(255,111,126,.3)}
+.inspiration-total{display:flex;justify-content:space-between;align-items:center;margin-top:7px;padding-top:7px;border-top:1px solid var(--line);font-size:11px}
+.inspiration-total span{margin:0!important;color:var(--muted)!important}
+.inspiration-total b{font-size:13px;color:var(--gold)}
+.inspiration-total.is-invalid b{color:var(--danger)}
+@media(max-width:640px){.run-input-grid{grid-template-columns:1fr}}
