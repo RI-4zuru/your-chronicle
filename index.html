@@ -114,7 +114,7 @@
 
       <section class="page" id="page-runs">
         <div class="page-title">
-          <div><div class="eyebrow">RUN LOG</div><h2>周回記録</h2><p>実獲得量・日時・1周の所要時間を記録。時間は分単位で、空欄なら平均計算から除外します。</p></div>
+          <div><div class="eyebrow">RUN LOG</div><h2>周回記録</h2><p>実獲得量・日時・1周の所要時間を記録。時間は1〜60分の整数で、空欄なら平均計算から除外します。</p></div>
           <button class="primary" data-open-run>＋ 周回を記録</button>
         </div>
 
@@ -234,10 +234,10 @@
   <dialog id="runDialog">
     <form method="dialog" id="runForm" class="dialog-card">
       <div class="dialog-head"><div><div class="eyebrow" id="runDialogEyebrow">NEW RUN</div><h2 id="runDialogTitle">今回の周回を記録</h2></div><button class="icon-button" value="cancel" aria-label="閉じる">×</button></div>
-      <p class="dialog-help" id="runDialogHelp">今回増えた量を入力してください。1周の時間は分単位（最大60分）で任意入力。入力がある記録だけで平均を計算します。</p>
+      <p class="dialog-help" id="runDialogHelp">今回増えた量を入力してください。1周の時間は1〜60分の整数で任意入力。入力がある記録だけで平均を計算します。</p>
       <div class="run-meta-grid">
         <label>日時<input id="runAt" type="datetime-local"></label>
-        <label>1周の時間 <small>任意・分</small><div class="input-with-unit"><input id="runDuration" type="number" inputmode="decimal" min="0.1" max="60" step="0.1" placeholder="例: 12.5"><span>分</span></div></label>
+        <label>1周の時間 <small>任意・分</small><div class="input-with-unit"><input id="runDuration" type="number" inputmode="numeric" min="1" max="60" step="1" placeholder="例: 12"><span>分</span></div></label>
       </div>
       <div class="run-input-grid">
         <label class="gain inspiration"><span>✦ ひらめき</span><input id="runInspiration" type="text" inputmode="decimal" placeholder="例: 2.48K"></label>
