@@ -234,6 +234,31 @@
     },0);
   }
 
+  function sumRunDuration(runs){
+    return runs.reduce((sum,r)=>{
+      const n=Number(r.durationSeconds);
+      return sum+(Number.isFinite(n) && n>0 ? n : 0);
+    },0);
+  }
+
+  function trendPercent(list){
+    const values=(Array.isArray(list)?list:[]).filter(n=>Number.isFinite(Number(n))).map(Number);
+    if(values.length<2)return null;
+    const recent=values.slice(-10);
+    const previous=values.slice(-20,-10);
+    if(!previous.length)return null;
+    const a=average(recent), b=average(previous);
+    if(!(b>0))return null;
+    return (a/b-1)*100;
+  }
+
+  function formatTrend(value){
+    if(value==null || !Number.isFinite(value))return '—';
+    const rounded=Math.round(value);
+    if(rounded===0)return '→ 0%';
+    return `${rounded>0?'↑':'↓'} ${Math.abs(rounded)}%`;
+  }
+
   function periodStats(){
     const now=new Date();
     const dayStart=localDayStart(now);
@@ -442,10 +467,32 @@
     $('#dissTime').textContent=(plan.runs!=null && avgTime>0)?formatEstimatedTime(plan.runs*avgTime):'—';
     setBar('#dissBar',planProgress);
 
+    renderTodayRemainingStrip();
     renderGoalTracker();
     renderDeadlinePlanner();
     renderRecentRuns();
     renderMilestones();
+  }
+
+  function renderTodayRemainingStrip(){
+    const root=$('#todayRemainingStrip');
+    if(!root)return;
+    const periods=periodStats();
+    const keys=['inspiration','sin','dissatisfaction'];
+    root.innerHTML='';
+    keys.forEach(key=>{
+      const meta=resourceGoalMeta(key);
+      const goal=Math.max(0,Number(state.goals?.[key]?.daily)||0);
+      const gained=sumRunGain(periods.todayRuns,key);
+      const remain=Math.max(0,goal-gained);
+      const runs=goal>0 && remain>0 && meta.average>0 ? Math.ceil(remain/meta.average) : 0;
+      const chip=document.createElement('div');
+      chip.className=`today-chip ${key}`;
+      chip.innerHTML=goal>0
+        ? `<span>${meta.symbol} ${meta.name}</span><b>${remain>0?`あと ${formatNumber(remain)}`:'達成'}</b><small>${remain>0 && runs>0?`約${formatNumber(runs,0)}周`:'✓'}</small>`
+        : `<span>${meta.symbol} ${meta.name}</span><b>目標未設定</b><small>—</small>`;
+      root.appendChild(chip);
+    });
   }
 
   function renderGoalTracker(){
@@ -454,6 +501,10 @@
     const periods=periodStats();
     $('#todayRunCount').textContent=`${periods.todayRuns.length}周`;
     $('#weekRunCount').textContent=`${periods.weekRuns.length}周`;
+    const todaySeconds=sumRunDuration(periods.todayRuns);
+    const weekSeconds=sumRunDuration(periods.weekRuns);
+    $('#todayRecordedTime').textContent=todaySeconds>0?formatEstimatedTime(todaySeconds):'—';
+    $('#weekRecordedTime').textContent=weekSeconds>0?formatEstimatedTime(weekSeconds):'—';
     $('#recordStreak').textContent=`${currentStreak()}日`;
     root.innerHTML='';
     const configs=[
@@ -518,14 +569,15 @@
           <div><span>必要 / 週</span><b>${plan.perWeek!=null?formatNumber(plan.perWeek):'—'}</b></div>
           <div><span>必要周回 / 日</span><b>${plan.runsPerDay!=null?`${formatNumber(plan.runsPerDay)}周`: '—'}</b></div>
           <div><span>残り推定時間</span><b>${(plan.average>0 && plan.remaining>0 && avgTime>0)?formatEstimatedTime(Math.ceil(plan.remaining/plan.average)*avgTime):'—'}</b></div>
-        </div>`;
+        </div>
+        <button type="button" class="deadline-apply ghost small" data-apply-deadline-goals="${key}" ${plan.perDay==null?'disabled':''}>必要ペースを日・週目標へ反映</button>`;
       root.appendChild(card);
     });
   }
 
   function renderRecentRuns(){
     const root=$('#recentRuns'); root.innerHTML='';
-    const list=state.runs.slice(-5).reverse();
+    const list=state.runs.slice(-3).reverse();
     if(!list.length){root.innerHTML='<div class="empty-state">まだ周回記録がありません。「今回の周回を記録」から最初の1周を残してみましょう。</div>';return;}
     list.forEach((r,idx)=>{
       const actualIndex=state.runs.length-idx;
@@ -568,6 +620,17 @@
     $('#runInspAvg').textContent=ia?formatNumber(ia):'—';
     $('#runDissAvg').textContent=da?formatNumber(da):'—';
     $('#runRecentAvg').textContent=recent?`✦ ${formatNumber(recent)}`:'—';
+    const inspValues=validGains('inspiration');
+    const dissValues=validGains('dissatisfaction');
+    $('#runInspBest').textContent=inspValues.length?formatNumber(Math.max(...inspValues)):'—';
+    $('#runDissBest').textContent=dissValues.length?formatNumber(Math.max(...dissValues)):'—';
+    $('#runFastest').textContent=durations.length?formatDuration(Math.min(...durations)):'—';
+    const inspTrend=trendPercent(inspValues);
+    const dissTrend=trendPercent(dissValues);
+    $('#runInspTrend').textContent=formatTrend(inspTrend);
+    $('#runDissTrend').textContent=formatTrend(dissTrend);
+    $('#runInspTrend').className=inspTrend>0?'trend-up':inspTrend<0?'trend-down':'';
+    $('#runDissTrend').className=dissTrend>0?'trend-up':dissTrend<0?'trend-down':'';
 
     const tbody=$('#runTableBody');tbody.innerHTML='';
     let indexed=state.runs.map((r,i)=>({r,i}));
@@ -908,7 +971,7 @@
       const n=raw===''?0:parseNumber(raw);
       if(n==null||n<0){toast('日次・週次目標の数値を確認してください');renderGoalTracker();return;}
       state.goals=state.goals||clone(defaultState.goals);
-      state.goals[key]=state.goals[key]||{daily:0,weekly:0};
+      state.goals[key]=state.goals[key]||{daily:0,weekly:0,monthly:0};
       state.goals[key][period]=n;
       localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
       renderGoalTracker();
@@ -924,6 +987,20 @@
       state.deadlines[key].date=parseDateOnly(input.value);
       saveState();
       toast('期限日を更新しました');
+    });
+
+    $('#deadlinePlannerGrid').addEventListener('click',e=>{
+      const btn=e.target.closest('[data-apply-deadline-goals]');
+      if(!btn)return;
+      const key=btn.dataset.applyDeadlineGoals;
+      const plan=deadlinePlanFor(key);
+      if(!(plan.perDay>=0) || !(plan.perWeek>=0)){toast('先に期限日を設定してください');return;}
+      state.goals=state.goals||clone(defaultState.goals);
+      state.goals[key]=state.goals[key]||{daily:0,weekly:0,monthly:0};
+      state.goals[key].daily=Math.ceil(plan.perDay);
+      state.goals[key].weekly=Math.ceil(plan.perWeek);
+      saveState();
+      toast(`${plan.name}の必要ペースを日・週目標へ反映しました`);
     });
 
     $('#openMilestoneSettings').addEventListener('click',openMilestoneModal);

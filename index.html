@@ -37,6 +37,7 @@
     <main>
       <section class="page is-active" id="page-dashboard">
         <div class="quick-run-bar">
+          <div id="todayRemainingStrip" class="today-remaining-strip" aria-label="今日の残り目標"></div>
           <button class="primary" data-open-run>＋ 今回の周回を記録</button>
         </div>
 
@@ -105,6 +106,8 @@
             <div class="goal-overview-stats">
               <span>今日 <b id="todayRunCount">0周</b></span>
               <span>今週 <b id="weekRunCount">0周</b></span>
+              <span>今日の記録時間 <b id="todayRecordedTime">—</b></span>
+              <span>今週の記録時間 <b id="weekRecordedTime">—</b></span>
               <span>連続 <b id="recordStreak">0日</b></span>
             </div>
           </div>
@@ -152,6 +155,8 @@
           <div class="mini-card"><span>ひらめき最高</span><b id="runInspBest">—</b></div>
           <div class="mini-card"><span>不満最高</span><b id="runDissBest">—</b></div>
           <div class="mini-card"><span>最短周回時間</span><b id="runFastest">—</b></div>
+          <div class="mini-card"><span>ひらめき効率</span><b id="runInspTrend">—</b><small>直近10周 vs その前10周</small></div>
+          <div class="mini-card"><span>不満効率</span><b id="runDissTrend">—</b><small>直近10周 vs その前10周</small></div>
         </div>
 
         <section class="panel run-table-panel">
