@@ -287,7 +287,7 @@
       {name:'Sin',current:state.resources.sin.current,target:state.resources.sin.target,accent:'var(--violet)'}
     ];
     const plan=getPlan();
-    if(plan.need>0)items.push({name:'嫉妬計画用の不満',current:plan.owned,target:plan.need,accent:'var(--rose)'});
+    if(plan.need>0)items.push({name:'嫉妬用の不満',current:plan.owned,target:plan.need,accent:'var(--rose)'});
     items.forEach(item=>{
       const p=pct(item.current,item.target);
       const checkpoints=[10,25,50,75,90,100];
@@ -348,6 +348,69 @@
         section.appendChild(row);
       });
       root.appendChild(section);
+    });
+  }
+
+  function collectJealousyInputs(){
+    const draft=state.jealousy.map(x=>({...x}));
+    let invalid=false;
+
+    $$('#jealousyGroups [data-j-name]').forEach(input=>{
+      const i=Number(input.dataset.jName);
+      if(!draft[i])return;
+      draft[i].name=input.value.trim()||'名称未設定';
+    });
+    $$('#jealousyGroups [data-j-current]').forEach(input=>{
+      const i=Number(input.dataset.jCurrent);
+      const raw=String(input.value).trim();
+      const n=Number(raw);
+      if(!draft[i] || raw==='' || !Number.isFinite(n) || n<0 || !Number.isInteger(n)){invalid=true;return;}
+      draft[i].current=n;
+    });
+    $$('#jealousyGroups [data-j-target]').forEach(input=>{
+      const i=Number(input.dataset.jTarget);
+      const raw=String(input.value).trim();
+      const n=Number(raw);
+      if(!draft[i] || raw==='' || !Number.isFinite(n) || n<0 || !Number.isInteger(n)){invalid=true;return;}
+      draft[i].target=n;
+    });
+
+    if(invalid){toast('嫉妬レベルは0以上の整数で入力してください');return null;}
+    return draft;
+  }
+
+  function saveJealousyFromScreen(message='嫉妬の変更を保存しました'){
+    const draft=collectJealousyInputs();
+    if(!draft)return false;
+    state.jealousy=draft;
+    saveState();
+    if(message)toast(message);
+    return true;
+  }
+
+  function buildJealousyCostTable(){
+    const input=$('#jealousyCostMaxLevel');
+    let max=Math.floor(Number(input.value)||10000);
+    max=Math.max(1000,Math.min(1000000,max));
+    // 1000を超えた部分は1000刻みにそろえる
+    if(max>1000)max=Math.ceil(max/1000)*1000;
+    input.value=String(max);
+
+    const levels=[];
+    for(let lv=100;lv<=Math.min(1000,max);lv+=100)levels.push(lv);
+    for(let lv=2000;lv<=max;lv+=1000)levels.push(lv);
+
+    const tbody=$('#jealousyCostTableBody');
+    tbody.innerHTML='';
+    let prev=0;
+    levels.forEach(lv=>{
+      const cumulative=jealousyCostToLevel(lv);
+      const interval=cumulative-jealousyCostToLevel(prev);
+      const tr=document.createElement('tr');
+      if(lv%1000===0)tr.classList.add('cost-major');
+      tr.innerHTML=`<td>Lv ${lv.toLocaleString('ja-JP')}</td><td>${formatNumber(interval)}</td><td>${formatNumber(cumulative)}</td>`;
+      tbody.appendChild(tr);
+      prev=lv;
     });
   }
 
@@ -537,16 +600,28 @@
     });
     $('#clearRuns').addEventListener('click',()=>{if(!confirm('周回履歴をすべて削除しますか？\n現在のリソース値は残ります。'))return;state.runs=[];saveState();});
 
-    $('#jealousyGroups').addEventListener('change',e=>{
-      const name=e.target.dataset.jName,current=e.target.dataset.jCurrent,target=e.target.dataset.jTarget;
-      if(name!=null)state.jealousy[Number(name)].name=e.target.value.trim()||'名称未設定';
-      if(current!=null){const v=Math.max(0,Math.floor(Number(e.target.value)||0));state.jealousy[Number(current)].current=v;if(state.jealousy[Number(current)].target<v)state.jealousy[Number(current)].target=v;}
-      if(target!=null)state.jealousy[Number(target)].target=Math.max(0,Math.floor(Number(e.target.value)||0));
-      saveState();
+    $('#saveJealousyChanges').addEventListener('click',()=>saveJealousyFromScreen());
+    $('#applyBulk').addEventListener('click',()=>{
+      const draft=collectJealousyInputs();if(!draft)return;
+      const raw=String($('#bulkTarget').value).trim(),n=Number(raw);
+      if(raw===''||!Number.isFinite(n)||n<0||!Number.isInteger(n)){toast('設定する嫉妬Lvを0以上の整数で入力してください');return;}
+      draft.forEach(x=>x.target=n);
+      state.jealousy=draft;saveState();toast(`全項目の目標を Lv${n.toLocaleString('ja-JP')} にしました`);
     });
-    $('#applyBulk').addEventListener('click',()=>{const v=Math.max(0,Math.floor(Number($('#bulkTarget').value)||0));state.jealousy.forEach(x=>x.target=v);saveState();toast(`全項目の目標を Lv${v} にしました`);});
-    $('#applyPlus').addEventListener('click',()=>{const v=Math.max(0,Math.floor(Number($('#bulkPlus').value)||0));state.jealousy.forEach(x=>x.target=(Number(x.current)||0)+v);saveState();toast(`全項目を現在値 +${v} Lv にしました`);});
-    $('#resetTargets').addEventListener('click',()=>{state.jealousy.forEach(x=>x.target=x.current);saveState();toast('目標を現在値に戻しました');});
+    $('#applyPlus').addEventListener('click',()=>{
+      const draft=collectJealousyInputs();if(!draft)return;
+      const raw=String($('#bulkPlus').value).trim(),n=Number(raw);
+      if(raw===''||!Number.isFinite(n)||n<0||!Number.isInteger(n)){toast('プラスする嫉妬Lvを0以上の整数で入力してください');return;}
+      draft.forEach(x=>x.target=(Number(x.current)||0)+n);
+      state.jealousy=draft;saveState();toast(`全項目を現在Lvから +${n.toLocaleString('ja-JP')} Lv にしました`);
+    });
+    $('#resetTargets').addEventListener('click',()=>{
+      const draft=collectJealousyInputs();if(!draft)return;
+      draft.forEach(x=>x.target=x.current);
+      state.jealousy=draft;saveState();toast('全項目の目標Lvを現在Lvに戻しました');
+    });
+    $('#openJealousyCostTable').addEventListener('click',()=>{buildJealousyCostTable();$('#jealousyCostDialog').showModal();});
+    $('#refreshJealousyCostTable').addEventListener('click',buildJealousyCostTable);
 
     const settingMap=[
       ['setInspCurrent','inspiration','current'],['setInspTarget','inspiration','target'],['setInspManual','inspiration','manualAverage'],

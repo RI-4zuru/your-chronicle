@@ -30,7 +30,7 @@
     <nav class="tabs" aria-label="ページ切り替え">
       <button class="tab is-active" data-page="dashboard">ダッシュボード</button>
       <button class="tab" data-page="runs">周回記録</button>
-      <button class="tab" data-page="jealousy">嫉妬プランナー</button>
+      <button class="tab" data-page="jealousy">嫉妬</button>
       <button class="tab" data-page="settings">設定</button>
     </nav>
 
@@ -85,7 +85,7 @@
                 <span class="resource-symbol">◆</span>
                 <div><div class="eyebrow">DISSATISFACTION</div><h3>不満</h3></div>
               </div>
-              <button class="ghost small" data-page-link="jealousy">嫉妬計画</button>
+              <button class="ghost small" data-page-link="jealousy">嫉妬</button>
             </div>
             <div class="big-number"><span id="dissCurrent">0</span><small> 所持</small></div>
             <div class="progress"><i id="dissBar"></i></div>
@@ -146,8 +146,12 @@
 
       <section class="page" id="page-jealousy">
         <div class="page-title">
-          <div><div class="eyebrow">JEALOUSY PLANNER</div><h2>嫉妬プランナー</h2><p><strong>見るのは「嫉妬レベル」</strong>です。ルーティンLvは使いません。現在Lv・目標Lvはすべて自由入力できます。</p></div>
-          <div class="planner-actions"><button class="ghost" id="resetTargets">目標を現在値に戻す</button><button class="primary" id="applyBulk">一括目標を適用</button></div>
+          <div><div class="eyebrow">JEALOUSY</div><h2>嫉妬</h2><p><strong>見るのは「嫉妬レベル」</strong>です。ルーティンLvは使いません。現在Lv・目標Lvはすべて自由入力できます。</p></div>
+          <div class="planner-actions">
+            <button class="ghost" id="openJealousyCostTable">必要不満表</button>
+            <button class="ghost" id="resetTargets">目標を現在値に戻す</button>
+            <button class="primary" id="saveJealousyChanges">変更を保存</button>
+          </div>
         </div>
 
         <section class="panel planner-summary">
@@ -158,11 +162,15 @@
             <div><span>推定残り周回</span><strong id="planRuns">—</strong></div>
             <div><span>推定時間</span><strong id="planTime">—</strong></div>
           </div>
-          <div class="bulk-row">
-            <label>全項目を <input id="bulkTarget" type="number" min="0" step="1" value="400"> Lvまで</label>
-            <span>または</span>
-            <label>現在より <input id="bulkPlus" type="number" min="0" step="1" value="100"> Lv上げる</label>
-            <button class="ghost small" id="applyPlus">＋指定を適用</button>
+          <div class="bulk-actions-grid">
+            <div class="bulk-action-card">
+              <div><span class="bulk-action-title">全項目の目標Lvをそろえる</span><small>入力したLvを、すべての項目の目標Lvに設定します。</small></div>
+              <div class="bulk-action-control"><input id="bulkTarget" type="number" min="0" step="1" value="400"><span>Lv</span><button class="ghost small" id="applyBulk">このLvにする</button></div>
+            </div>
+            <div class="bulk-action-card">
+              <div><span class="bulk-action-title">全項目を現在Lvからプラス</span><small>各項目の現在Lvに、入力したLvを加えた値を目標Lvにします。</small></div>
+              <div class="bulk-action-control"><span>＋</span><input id="bulkPlus" type="number" min="0" step="1" value="100"><span>Lv</span><button class="ghost small" id="applyPlus">このLvをプラス</button></div>
+            </div>
           </div>
           <div class="formula-note">通常項目の不満消費は、Lv0→1が10、その後はLv1→2が1.0、Lv2→3が1.1…として計算します。端数も保持して計算します。</div>
         </section>
@@ -250,6 +258,27 @@
       </div>
       <label>メモ<input id="runMemo" type="text" maxlength="80" placeholder="任意"></label>
       <div class="dialog-actions"><button class="ghost" value="cancel">キャンセル</button><button type="button" class="primary" id="saveRun">年代記に記録</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="jealousyCostDialog" class="wide-dialog">
+    <form method="dialog" class="dialog-card cost-table-dialog-card">
+      <div class="dialog-head">
+        <div><div class="eyebrow">DISSATISFACTION COST</div><h2>嫉妬レベル 必要不満表</h2></div>
+        <button class="icon-button" value="cancel" aria-label="閉じる">×</button>
+      </div>
+      <p class="dialog-help">Lv100〜1000までは100Lvごと、それ以降は1000Lvごとに表示します。「区間必要」は前の掲載LvからそのLvまでに必要な不満、「累計必要」はLv0からそのLvまでの合計です。</p>
+      <div class="cost-table-tools">
+        <label>表示上限Lv <input id="jealousyCostMaxLevel" type="number" min="1000" max="1000000" step="1000" value="10000"></label>
+        <button type="button" class="ghost small" id="refreshJealousyCostTable">表を更新</button>
+      </div>
+      <div class="table-wrap cost-table-wrap">
+        <table class="cost-table">
+          <thead><tr><th>嫉妬Lv</th><th>区間必要不満</th><th>Lv0から累計</th></tr></thead>
+          <tbody id="jealousyCostTableBody"></tbody>
+        </table>
+      </div>
+      <div class="dialog-actions"><button class="primary" value="cancel">閉じる</button></div>
     </form>
   </dialog>
 
