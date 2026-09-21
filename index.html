@@ -146,7 +146,7 @@
 
       <section class="page" id="page-jealousy">
         <div class="page-title">
-          <div><div class="eyebrow">JEALOUSY</div><h2>嫉妬</h2><p><strong>見るのは「嫉妬レベル」</strong>です。ルーティンLvは使いません。現在Lv・目標Lvはすべて自由入力できます。</p></div>
+          <div><div class="eyebrow">JEALOUSY</div><h2>嫉妬</h2><p><strong>見るのは「嫉妬レベル」</strong>です。ルーティンLvは使いません。現在Lv・目標Lvはすべて自由入力できます。</p><div class="level-step-tools"><span>各項目の↑↓変更幅</span><div class="segmented compact-segmented" id="jealousyStepControl"><button type="button" data-step="1">1</button><button type="button" data-step="100">100</button><button type="button" data-step="1000">1K</button></div></div></div>
           <div class="planner-actions">
             <button class="ghost" id="openJealousyCostTable">必要不満表</button>
             <button class="ghost" id="resetTargets">目標を現在値に戻す</button>
@@ -162,14 +162,19 @@
             <div><span>推定残り周回</span><strong id="planRuns">—</strong></div>
             <div><span>推定時間</span><strong id="planTime">—</strong></div>
           </div>
-          <div class="bulk-actions-grid">
-            <div class="bulk-action-card">
-              <div><span class="bulk-action-title">全項目の目標Lvをそろえる</span><small>入力したLvを、すべての項目の目標Lvに設定します。</small></div>
-              <div class="bulk-action-control"><input id="bulkTarget" type="number" min="0" step="1" value="400"><span>Lv</span><button class="ghost small" id="applyBulk">このLvにする</button></div>
+          <div class="bulk-inline-row">
+            <div class="bulk-inline-control">
+              <span class="bulk-inline-label">全項目の目標を</span>
+              <input id="bulkTarget" type="number" min="0" step="1" value="400" aria-label="全項目の目標嫉妬レベル">
+              <span>Lvに</span>
+              <button class="ghost small" id="applyBulk">設定</button>
             </div>
-            <div class="bulk-action-card">
-              <div><span class="bulk-action-title">全項目を現在Lvからプラス</span><small>各項目の現在Lvに、入力したLvを加えた値を目標Lvにします。</small></div>
-              <div class="bulk-action-control"><span>＋</span><input id="bulkPlus" type="number" min="0" step="1" value="100"><span>Lv</span><button class="ghost small" id="applyPlus">このLvをプラス</button></div>
+            <div class="bulk-inline-control">
+              <span class="bulk-inline-label">全項目を現在Lvから</span>
+              <span>＋</span>
+              <input id="bulkPlus" type="number" min="0" step="1" value="100" aria-label="全項目に加える嫉妬レベル">
+              <span>Lv</span>
+              <button class="ghost small" id="applyPlus">加算</button>
             </div>
           </div>
           <div class="formula-note">通常項目の不満消費は、Lv0→1が10、その後はLv1→2が1.0、Lv2→3が1.1…として計算します。端数も保持して計算します。</div>
@@ -261,11 +266,11 @@
     </form>
   </dialog>
 
-  <dialog id="jealousyCostDialog" class="wide-dialog">
-    <form method="dialog" class="dialog-card cost-table-dialog-card">
+  <div id="jealousyCostDialog" class="modal-overlay" hidden aria-hidden="true">
+    <section class="modal-card cost-table-dialog-card" role="dialog" aria-modal="true" aria-labelledby="jealousyCostDialogTitle">
       <div class="dialog-head">
-        <div><div class="eyebrow">DISSATISFACTION COST</div><h2>嫉妬レベル 必要不満表</h2></div>
-        <button class="icon-button" value="cancel" aria-label="閉じる">×</button>
+        <div><div class="eyebrow">DISSATISFACTION COST</div><h2 id="jealousyCostDialogTitle">嫉妬レベル 必要不満表</h2></div>
+        <button type="button" class="icon-button" data-close-jealousy-cost aria-label="閉じる">×</button>
       </div>
       <p class="dialog-help">Lv100〜1000までは100Lvごと、それ以降は1000Lvごとに表示します。「区間必要」は前の掲載LvからそのLvまでに必要な不満、「累計必要」はLv0からそのLvまでの合計です。</p>
       <div class="cost-table-tools">
@@ -278,9 +283,9 @@
           <tbody id="jealousyCostTableBody"></tbody>
         </table>
       </div>
-      <div class="dialog-actions"><button class="primary" value="cancel">閉じる</button></div>
-    </form>
-  </dialog>
+      <div class="dialog-actions"><button type="button" class="primary" data-close-jealousy-cost>閉じる</button></div>
+    </section>
+  </div>
 
   <dialog id="resourceDialog">
     <form method="dialog" class="dialog-card compact">

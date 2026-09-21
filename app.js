@@ -5,6 +5,7 @@
 
   const defaultState = {
     version: 1,
+    ui: { jealousyStep: 100 },
     resources: {
       inspiration: { current: 40000, target: 10000000, basis: '10', manualAverage: 0 },
       sin: { current: 1500, target: 10000, defaultGain: 42 },
@@ -51,6 +52,8 @@
   function mergeState(raw){
     const base = clone(defaultState);
     if (!raw || typeof raw !== 'object') return base;
+    if (raw.ui && typeof raw.ui === 'object') base.ui = { ...base.ui, ...raw.ui };
+    if (![1,100,1000].includes(Number(base.ui.jealousyStep))) base.ui.jealousyStep = 100;
     if (raw.resources) {
       for (const key of Object.keys(base.resources)) base.resources[key] = { ...base.resources[key], ...(raw.resources[key] || {}) };
     }
@@ -344,11 +347,30 @@
         const item=state.jealousy[i];
         const need=jealousyNeed(item.current,item.target);
         const row=document.createElement('div');row.className='jealousy-row';
-        row.innerHTML=`<div class="jealousy-name"><input data-j-name="${i}" value="${escapeAttr(item.name)}" aria-label="項目名"></div><input data-j-current="${i}" type="number" min="0" step="1" value="${Math.floor(item.current)}" aria-label="現在の嫉妬レベル"><span class="arrow">→</span><input data-j-target="${i}" type="number" min="0" step="1" value="${Math.floor(item.target)}" aria-label="目標の嫉妬レベル"><div class="need-cell">${formatNumber(need)}<small>不満</small></div>`;
+        const levelStep=[1,100,1000].includes(Number(state.ui?.jealousyStep))?Number(state.ui.jealousyStep):100;
+        row.innerHTML=`<div class="jealousy-name"><input data-j-name="${i}" value="${escapeAttr(item.name)}" aria-label="項目名"></div><input data-j-current="${i}" type="number" min="0" step="${levelStep}" value="${Math.floor(item.current)}" aria-label="現在の嫉妬レベル"><span class="arrow">→</span><input data-j-target="${i}" type="number" min="0" step="${levelStep}" value="${Math.floor(item.target)}" aria-label="目標の嫉妬レベル"><div class="need-cell">${formatNumber(need)}<small>不満</small></div>`;
         section.appendChild(row);
       });
       root.appendChild(section);
     });
+    syncJealousyStepControl();
+  }
+
+  function syncJealousyStepControl(){
+    const step=[1,100,1000].includes(Number(state.ui?.jealousyStep))?Number(state.ui.jealousyStep):100;
+    $$('#jealousyStepControl [data-step]').forEach(btn=>btn.classList.toggle('is-active',Number(btn.dataset.step)===step));
+    $$('#jealousyGroups [data-j-current], #jealousyGroups [data-j-target]').forEach(input=>{ input.step=String(step); });
+  }
+
+  function setJealousyStep(step){
+    const n=Number(step);
+    if(![1,100,1000].includes(n))return;
+    state.ui=state.ui||{};
+    state.ui.jealousyStep=n;
+    // 入力中の未保存値を消さないため、全体再描画はせず step 属性だけ切り替える。
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    syncJealousyStepControl();
+    toast(`各項目の↑↓変更幅を ${n===1000?'1K':n.toLocaleString('ja-JP')} Lv にしました`);
   }
 
   function collectJealousyInputs(){
@@ -600,6 +622,11 @@
     });
     $('#clearRuns').addEventListener('click',()=>{if(!confirm('周回履歴をすべて削除しますか？\n現在のリソース値は残ります。'))return;state.runs=[];saveState();});
 
+    $('#jealousyStepControl').addEventListener('click',e=>{
+      const btn=e.target.closest('button[data-step]');
+      if(!btn)return;
+      setJealousyStep(btn.dataset.step);
+    });
     $('#saveJealousyChanges').addEventListener('click',()=>saveJealousyFromScreen());
     $('#applyBulk').addEventListener('click',()=>{
       const draft=collectJealousyInputs();if(!draft)return;
@@ -620,8 +647,25 @@
       draft.forEach(x=>x.target=x.current);
       state.jealousy=draft;saveState();toast('全項目の目標Lvを現在Lvに戻しました');
     });
-    $('#openJealousyCostTable').addEventListener('click',()=>{buildJealousyCostTable();$('#jealousyCostDialog').showModal();});
+    const jealousyCostModal=$('#jealousyCostDialog');
+    const openJealousyCostModal=()=>{
+      buildJealousyCostTable();
+      jealousyCostModal.hidden=false;
+      jealousyCostModal.setAttribute('aria-hidden','false');
+      document.body.classList.add('modal-open');
+      requestAnimationFrame(()=>jealousyCostModal.classList.add('is-open'));
+    };
+    const closeJealousyCostModal=()=>{
+      jealousyCostModal.classList.remove('is-open');
+      jealousyCostModal.setAttribute('aria-hidden','true');
+      document.body.classList.remove('modal-open');
+      window.setTimeout(()=>{if(!jealousyCostModal.classList.contains('is-open'))jealousyCostModal.hidden=true;},170);
+    };
+    $('#openJealousyCostTable').addEventListener('click',openJealousyCostModal);
     $('#refreshJealousyCostTable').addEventListener('click',buildJealousyCostTable);
+    $$('[data-close-jealousy-cost]').forEach(btn=>btn.addEventListener('click',closeJealousyCostModal));
+    jealousyCostModal.addEventListener('click',e=>{if(e.target===jealousyCostModal)closeJealousyCostModal();});
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!jealousyCostModal.hidden)closeJealousyCostModal();});
 
     const settingMap=[
       ['setInspCurrent','inspiration','current'],['setInspTarget','inspiration','target'],['setInspManual','inspiration','manualAverage'],
