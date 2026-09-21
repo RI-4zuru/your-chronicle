@@ -292,12 +292,13 @@
     const plan=getPlan();
     if(plan.need>0)items.push({name:'嫉妬用の不満',current:plan.owned,target:plan.need,accent:'var(--rose)'});
     items.forEach(item=>{
-      const p=pct(item.current,item.target);
+      const overallP=pct(item.current,item.target);
       const checkpoints=[10,25,50,75,90,100];
-      const next=checkpoints.find(x=>x>p)??100;
+      const next=checkpoints.find(x=>x>overallP)??100;
       const amount=item.target*next/100;
+      const milestoneProgress=amount>0 ? clamp(item.current/amount*100,0,100) : 0;
       const div=document.createElement('div'); div.className='milestone';
-      div.innerHTML=`<div class="milestone-top"><span>${item.name} · 次は${next}%</span><span>${formatNumber(amount)}</span></div><div class="progress" style="--accent:${item.accent}"><i style="width:${p}%;background:var(--accent)"></i></div>`;
+      div.innerHTML=`<div class="milestone-top"><span>${item.name} · 次は${next}%</span><span>${formatNumber(amount)}</span></div><div class="progress" style="--accent:${item.accent}"><i style="width:${milestoneProgress}%;background:var(--accent)"></i></div>`;
       root.appendChild(div);
     });
   }
