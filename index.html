@@ -99,6 +99,19 @@
           </article>
         </div>
 
+        <section class="panel goal-tracker-panel">
+          <div class="section-head goal-tracker-head">
+            <div><div class="eyebrow">DAILY / WEEKLY GOALS</div><h3>今日・今週の目標</h3></div>
+            <div class="goal-overview-stats">
+              <span>今日 <b id="todayRunCount">0周</b></span>
+              <span>今週 <b id="weekRunCount">0周</b></span>
+              <span>連続 <b id="recordStreak">0日</b></span>
+            </div>
+          </div>
+          <div id="goalTrackerGrid" class="goal-tracker-grid"></div>
+          <div class="goal-note">目標値はメイン画面から直接変更できます。週次集計は月曜 0:00 から始まります。</div>
+        </section>
+
         <div class="dashboard-lower">
           <section class="panel recent-panel">
             <div class="section-head"><div><div class="eyebrow">RECENT RUNS</div><h3>最近の周回</h3></div><button class="ghost small" data-page-link="runs">すべて見る</button></div>
@@ -106,7 +119,7 @@
           </section>
 
           <section class="panel milestone-panel">
-            <div class="section-head"><div><div class="eyebrow">MILESTONES</div><h3>次の節目</h3></div></div>
+            <div class="section-head"><div><div class="eyebrow">MILESTONES</div><h3>次の節目</h3></div><button class="ghost small" id="openMilestoneSettings">節目設定</button></div>
             <div id="milestones" class="milestones"></div>
           </section>
         </div>
@@ -265,6 +278,24 @@
       <div class="dialog-actions"><button class="ghost" value="cancel">キャンセル</button><button type="button" class="primary" id="saveRun">年代記に記録</button></div>
     </form>
   </dialog>
+
+  <div id="milestoneDialog" class="modal-overlay" hidden aria-hidden="true">
+    <div class="modal-card milestone-settings-card" role="dialog" aria-modal="true" aria-labelledby="milestoneDialogTitle">
+      <div class="dialog-head">
+        <div><div class="eyebrow">MILESTONE SETTINGS</div><h3 id="milestoneDialogTitle">節目を設定</h3></div>
+        <button class="ghost small" type="button" data-close-milestone>閉じる</button>
+      </div>
+      <p class="modal-help">1〜99%の節目をカンマ区切りで入力してください。100%は最終目標として自動で追加されます。</p>
+      <label class="milestone-input-label">節目（%）
+        <input id="milestoneInput" type="text" inputmode="decimal" placeholder="例: 10, 25, 50, 75, 90">
+      </label>
+      <div id="milestonePreview" class="milestone-preview"></div>
+      <div class="dialog-actions">
+        <button class="ghost" type="button" data-close-milestone>キャンセル</button>
+        <button class="primary" type="button" id="saveMilestones">保存</button>
+      </div>
+    </div>
+  </div>
 
   <div id="jealousyCostDialog" class="modal-overlay" hidden aria-hidden="true">
     <section class="modal-card cost-table-dialog-card" role="dialog" aria-modal="true" aria-labelledby="jealousyCostDialogTitle">

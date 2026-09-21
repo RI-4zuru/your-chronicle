@@ -6,6 +6,12 @@
   const defaultState = {
     version: 1,
     ui: { jealousyStep: 100 },
+    milestones: [10,25,50,75,90,100],
+    goals: {
+      inspiration: { daily: 0, weekly: 0 },
+      sin: { daily: 0, weekly: 0 },
+      dissatisfaction: { daily: 0, weekly: 0 }
+    },
     resources: {
       inspiration: { current: 40000, target: 10000000, basis: '10', manualAverage: 0 },
       sin: { current: 1500, target: 10000, defaultGain: 42 },
@@ -54,6 +60,18 @@
     if (!raw || typeof raw !== 'object') return base;
     if (raw.ui && typeof raw.ui === 'object') base.ui = { ...base.ui, ...raw.ui };
     if (![1,100,1000].includes(Number(base.ui.jealousyStep))) base.ui.jealousyStep = 100;
+    if (Array.isArray(raw.milestones)) base.milestones = normalizeMilestones(raw.milestones);
+    if (raw.goals && typeof raw.goals === 'object') {
+      for (const key of Object.keys(base.goals)) {
+        const incoming = raw.goals[key];
+        if (incoming && typeof incoming === 'object') {
+          base.goals[key] = {
+            daily: Math.max(0, Number(incoming.daily)||0),
+            weekly: Math.max(0, Number(incoming.weekly)||0)
+          };
+        }
+      }
+    }
     if (raw.resources) {
       for (const key of Object.keys(base.resources)) base.resources[key] = { ...base.resources[key], ...(raw.resources[key] || {}) };
     }
@@ -157,6 +175,100 @@
   function roundUp(value){ return Number.isFinite(value) && value > 0 ? Math.ceil(value) : value <= 0 ? 0 : null; }
   function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
   function pct(current,target){ return target > 0 ? clamp(current/target*100,0,100) : 0; }
+
+
+  function normalizeMilestones(values){
+    const list=(Array.isArray(values)?values:[])
+      .map(Number)
+      .filter(n=>Number.isFinite(n) && n>0 && n<100)
+      .map(n=>Math.round(n*100)/100);
+    return [...new Set(list)].sort((a,b)=>a-b).concat(100);
+  }
+
+  function localDayStart(date=new Date()){
+    const d=new Date(date);
+    d.setHours(0,0,0,0);
+    return d;
+  }
+
+  function localWeekStart(date=new Date()){
+    const d=localDayStart(date);
+    const day=d.getDay();
+    const diff=(day+6)%7; // 月曜始まり
+    d.setDate(d.getDate()-diff);
+    return d;
+  }
+
+  function periodRuns(start,end){
+    const a=start.getTime(), b=end.getTime();
+    return state.runs.filter(r=>{
+      const t=new Date(r.at).getTime();
+      return Number.isFinite(t) && t>=a && t<b;
+    });
+  }
+
+  function sumRunGain(runs,key){
+    return runs.reduce((sum,r)=>{
+      const n=Number(r[key]);
+      return sum+(Number.isFinite(n) && n>=0 ? n : 0);
+    },0);
+  }
+
+  function todayAndWeekStats(){
+    const now=new Date();
+    const dayStart=localDayStart(now);
+    const dayEnd=new Date(dayStart); dayEnd.setDate(dayEnd.getDate()+1);
+    const weekStart=localWeekStart(now);
+    const weekEnd=new Date(weekStart); weekEnd.setDate(weekEnd.getDate()+7);
+    const todayRuns=periodRuns(dayStart,dayEnd);
+    const weekRuns=periodRuns(weekStart,weekEnd);
+    return {dayStart,dayEnd,weekStart,weekEnd,todayRuns,weekRuns};
+  }
+
+  function dateKey(value){
+    const d=new Date(value);
+    if(Number.isNaN(d.getTime()))return '';
+    const pad=n=>String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  }
+
+  function currentStreak(){
+    const days=new Set(state.runs.map(r=>dateKey(r.at)).filter(Boolean));
+    if(!days.size)return 0;
+    let cursor=localDayStart(new Date());
+    const todayKey=dateKey(cursor);
+    if(!days.has(todayKey)){
+      cursor.setDate(cursor.getDate()-1);
+      if(!days.has(dateKey(cursor)))return 0;
+    }
+    let count=0;
+    while(days.has(dateKey(cursor))){
+      count++;
+      cursor.setDate(cursor.getDate()-1);
+    }
+    return count;
+  }
+
+  function resourceGoalMeta(key){
+    if(key==='inspiration'){
+      const r=state.resources.inspiration;
+      return {name:'ひらめき',symbol:'✦',finalTarget:r.target,average:averageByBasis('inspiration',r.basis,r.manualAverage)};
+    }
+    if(key==='sin'){
+      const r=state.resources.sin;
+      return {name:'Sin',symbol:'◇',finalTarget:r.target,average:Math.max(0,Number(r.defaultGain)||0)};
+    }
+    const plan=getPlan();
+    return {name:'不満',symbol:'◆',finalTarget:plan.need,average:plan.avg};
+  }
+
+  function periodGoalText(current,goal,avg){
+    if(!(goal>0))return '目標未設定';
+    const remaining=Math.max(0,goal-current);
+    if(remaining<=0)return '達成済み';
+    const runs=avg>0?Math.ceil(remaining/avg):null;
+    return `あと ${formatNumber(remaining)}${runs!=null?` · 約${formatNumber(runs,0)}周`:''}`;
+  }
 
   function validGains(key){
     return state.runs.map(r => Number(r[key])).filter(n => Number.isFinite(n) && n >= 0);
@@ -267,8 +379,49 @@
     $('#dissTime').textContent=(plan.runs!=null && avgTime>0)?formatEstimatedTime(plan.runs*avgTime):'—';
     setBar('#dissBar',planProgress);
 
+    renderGoalTracker();
     renderRecentRuns();
     renderMilestones();
+  }
+
+  function renderGoalTracker(){
+    const root=$('#goalTrackerGrid');
+    if(!root)return;
+    const periods=todayAndWeekStats();
+    $('#todayRunCount').textContent=`${periods.todayRuns.length}周`;
+    $('#weekRunCount').textContent=`${periods.weekRuns.length}周`;
+    $('#recordStreak').textContent=`${currentStreak()}日`;
+    root.innerHTML='';
+    const configs=[
+      ['inspiration','inspiration'],
+      ['sin','sin'],
+      ['dissatisfaction','dissatisfaction']
+    ];
+    configs.forEach(([key,cls])=>{
+      const meta=resourceGoalMeta(key);
+      const daily=Math.max(0,Number(state.goals?.[key]?.daily)||0);
+      const weekly=Math.max(0,Number(state.goals?.[key]?.weekly)||0);
+      const today=sumRunGain(periods.todayRuns,key);
+      const week=sumRunGain(periods.weekRuns,key);
+      const finalTarget=Math.max(0,Number(meta.finalTarget)||0);
+      const dailyShare=finalTarget>0 && daily>0 ? daily/finalTarget*100 : 0;
+      const weeklyShare=finalTarget>0 && weekly>0 ? weekly/finalTarget*100 : 0;
+      const card=document.createElement('article');
+      card.className=`goal-card ${cls}`;
+      card.innerHTML=`
+        <div class="goal-card-head"><strong>${meta.symbol} ${meta.name}</strong><span>最終 ${finalTarget>0?formatNumber(finalTarget):'—'}</span></div>
+        <div class="goal-period">
+          <div class="goal-period-top"><span>今日 <b>${formatNumber(today)}</b></span><label>目標 <input type="text" inputmode="decimal" data-goal-resource="${key}" data-goal-period="daily" value="${daily>0?formatNumber(daily):''}" placeholder="未設定"></label></div>
+          <div class="progress goal-progress"><i style="width:${daily>0?pct(today,daily):0}%"></i></div>
+          <div class="goal-period-meta"><span>${periodGoalText(today,daily,meta.average)}</span><span>${daily>0&&finalTarget>0?`最終の${dailyShare.toFixed(dailyShare>=10?1:2)}%`:''}</span></div>
+        </div>
+        <div class="goal-period">
+          <div class="goal-period-top"><span>今週 <b>${formatNumber(week)}</b></span><label>目標 <input type="text" inputmode="decimal" data-goal-resource="${key}" data-goal-period="weekly" value="${weekly>0?formatNumber(weekly):''}" placeholder="未設定"></label></div>
+          <div class="progress goal-progress"><i style="width:${weekly>0?pct(week,weekly):0}%"></i></div>
+          <div class="goal-period-meta"><span>${periodGoalText(week,weekly,meta.average)}</span><span>${weekly>0&&finalTarget>0?`最終の${weeklyShare.toFixed(weeklyShare>=10?1:2)}%`:''}</span></div>
+        </div>`;
+      root.appendChild(card);
+    });
   }
 
   function renderRecentRuns(){
@@ -293,12 +446,13 @@
     if(plan.need>0)items.push({name:'嫉妬用の不満',current:plan.owned,target:plan.need,accent:'var(--rose)'});
     items.forEach(item=>{
       const overallP=pct(item.current,item.target);
-      const checkpoints=[10,25,50,75,90,100];
+      const checkpoints=normalizeMilestones(state.milestones);
       const next=checkpoints.find(x=>x>overallP)??100;
       const amount=item.target*next/100;
       const milestoneProgress=amount>0 ? clamp(item.current/amount*100,0,100) : 0;
       const div=document.createElement('div'); div.className='milestone';
-      div.innerHTML=`<div class="milestone-top"><span>${item.name} · 次は${next}%</span><span>${formatNumber(amount)}</span></div><div class="progress" style="--accent:${item.accent}"><i style="width:${milestoneProgress}%;background:var(--accent)"></i></div>`;
+      const remain=Math.max(0,amount-item.current);
+      div.innerHTML=`<div class="milestone-top"><span>${item.name} · 次は${next}%</span><span>${formatNumber(amount)}</span></div><div class="progress" style="--accent:${item.accent}"><i style="width:${milestoneProgress}%;background:var(--accent)"></i></div><div class="milestone-sub"><span>${milestoneProgress.toFixed(0)}%</span><span>${remain>0?`あと ${formatNumber(remain)}`:'到達'}</span></div>`;
       root.appendChild(div);
     });
   }
@@ -435,6 +589,42 @@
       tbody.appendChild(tr);
       prev=lv;
     });
+  }
+
+  function openMilestoneModal(){
+    const modal=$('#milestoneDialog');
+    $('#milestoneInput').value=normalizeMilestones(state.milestones).filter(x=>x<100).join(', ');
+    updateMilestonePreview();
+    modal.hidden=false;
+    modal.setAttribute('aria-hidden','false');
+    document.body.classList.add('modal-open');
+    requestAnimationFrame(()=>modal.classList.add('is-open'));
+    setTimeout(()=>$('#milestoneInput')?.focus(),40);
+  }
+
+  function closeMilestoneModal(){
+    const modal=$('#milestoneDialog');
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden','true');
+    document.body.classList.remove('modal-open');
+    window.setTimeout(()=>{if(!modal.classList.contains('is-open'))modal.hidden=true;},170);
+  }
+
+  function parseMilestoneInput(){
+    const raw=String($('#milestoneInput').value||'').trim();
+    if(!raw)return [100];
+    const parts=raw.split(/[、,，\s]+/).filter(Boolean);
+    const nums=parts.map(Number);
+    if(nums.some(n=>!Number.isFinite(n)||n<=0||n>=100))return null;
+    return normalizeMilestones(nums);
+  }
+
+  function updateMilestonePreview(){
+    const preview=$('#milestonePreview');
+    const list=parseMilestoneInput();
+    if(!list){preview.textContent='1〜99の数字をカンマ区切りで入力してください。';preview.classList.add('is-error');return;}
+    preview.classList.remove('is-error');
+    preview.innerHTML=list.map(x=>`<span>${x}%</span>`).join('');
   }
 
   function renderSettings(){
@@ -611,6 +801,35 @@
       state.resources[activeResource].current=c;state.resources[activeResource].target=t;$('#resourceDialog').close();saveState();toast('目標を更新しました');
     });
 
+    $('#goalTrackerGrid').addEventListener('change',e=>{
+      const input=e.target.closest('[data-goal-resource][data-goal-period]');
+      if(!input)return;
+      const key=input.dataset.goalResource, period=input.dataset.goalPeriod;
+      const raw=String(input.value||'').trim();
+      const n=raw===''?0:parseNumber(raw);
+      if(n==null||n<0){toast('日次・週次目標の数値を確認してください');renderGoalTracker();return;}
+      state.goals=state.goals||clone(defaultState.goals);
+      state.goals[key]=state.goals[key]||{daily:0,weekly:0};
+      state.goals[key][period]=n;
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+      renderGoalTracker();
+      toast(`${period==='daily'?'今日':'今週'}の目標を更新しました`);
+    });
+
+    $('#openMilestoneSettings').addEventListener('click',openMilestoneModal);
+    $('#milestoneInput').addEventListener('input',updateMilestonePreview);
+    $('#saveMilestones').addEventListener('click',()=>{
+      const list=parseMilestoneInput();
+      if(!list){toast('節目は1〜99%をカンマ区切りで入力してください');return;}
+      state.milestones=list;
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+      closeMilestoneModal();
+      renderDashboard();
+      toast('節目を更新しました');
+    });
+    $$('[data-close-milestone]').forEach(btn=>btn.addEventListener('click',closeMilestoneModal));
+    $('#milestoneDialog').addEventListener('click',e=>{if(e.target===$('#milestoneDialog'))closeMilestoneModal();});
+
     $('#runFilter').addEventListener('click',e=>{const b=e.target.closest('button[data-filter]');if(!b)return;runFilter=b.dataset.filter;$$('#runFilter button').forEach(x=>x.classList.toggle('is-active',x===b));renderRuns();});
     $('#runTableBody').addEventListener('click',e=>{
       const edit=e.target.closest('[data-edit-run]');
@@ -666,7 +885,11 @@
     $('#refreshJealousyCostTable').addEventListener('click',buildJealousyCostTable);
     $$('[data-close-jealousy-cost]').forEach(btn=>btn.addEventListener('click',closeJealousyCostModal));
     jealousyCostModal.addEventListener('click',e=>{if(e.target===jealousyCostModal)closeJealousyCostModal();});
-    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!jealousyCostModal.hidden)closeJealousyCostModal();});
+    document.addEventListener('keydown',e=>{
+      if(e.key!=='Escape')return;
+      if(!jealousyCostModal.hidden)closeJealousyCostModal();
+      if(!$('#milestoneDialog').hidden)closeMilestoneModal();
+    });
 
     const settingMap=[
       ['setInspCurrent','inspiration','current'],['setInspTarget','inspiration','target'],['setInspManual','inspiration','manualAverage'],
