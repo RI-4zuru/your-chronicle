@@ -8,9 +8,14 @@
     ui: { jealousyStep: 100 },
     milestones: [10,25,50,75,90,100],
     goals: {
-      inspiration: { daily: 0, weekly: 0 },
-      sin: { daily: 0, weekly: 0 },
-      dissatisfaction: { daily: 0, weekly: 0 }
+      inspiration: { daily: 0, weekly: 0, monthly: 0 },
+      sin: { daily: 0, weekly: 0, monthly: 0 },
+      dissatisfaction: { daily: 0, weekly: 0, monthly: 0 }
+    },
+    deadlines: {
+      inspiration: { date: '' },
+      sin: { date: '' },
+      dissatisfaction: { date: '' }
     },
     resources: {
       inspiration: { current: 40000, target: 10000000, basis: '10', manualAverage: 0 },
@@ -67,13 +72,22 @@
         if (incoming && typeof incoming === 'object') {
           base.goals[key] = {
             daily: Math.max(0, Number(incoming.daily)||0),
-            weekly: Math.max(0, Number(incoming.weekly)||0)
+            weekly: Math.max(0, Number(incoming.weekly)||0),
+            monthly: Math.max(0, Number(incoming.monthly)||0)
           };
         }
       }
     }
     if (raw.resources) {
       for (const key of Object.keys(base.resources)) base.resources[key] = { ...base.resources[key], ...(raw.resources[key] || {}) };
+    }
+    if (raw.deadlines && typeof raw.deadlines === 'object') {
+      for (const key of Object.keys(base.deadlines)) {
+        const incoming = raw.deadlines[key];
+        if (incoming && typeof incoming === 'object') {
+          base.deadlines[key] = { date: String(incoming.date || '') };
+        }
+      }
     }
     if (Array.isArray(raw.runs)) base.runs = raw.runs;
     if (Array.isArray(raw.jealousy) && raw.jealousy.length) base.jealousy = raw.jealousy.map((x,i) => ({...base.jealousy[i % base.jealousy.length], ...x}));
@@ -199,6 +213,12 @@
     return d;
   }
 
+  function localMonthStart(date=new Date()){
+    const d=localDayStart(date);
+    d.setDate(1);
+    return d;
+  }
+
   function periodRuns(start,end){
     const a=start.getTime(), b=end.getTime();
     return state.runs.filter(r=>{
@@ -214,15 +234,18 @@
     },0);
   }
 
-  function todayAndWeekStats(){
+  function periodStats(){
     const now=new Date();
     const dayStart=localDayStart(now);
     const dayEnd=new Date(dayStart); dayEnd.setDate(dayEnd.getDate()+1);
     const weekStart=localWeekStart(now);
     const weekEnd=new Date(weekStart); weekEnd.setDate(weekEnd.getDate()+7);
+    const monthStart=localMonthStart(now);
+    const monthEnd=new Date(monthStart); monthEnd.setMonth(monthEnd.getMonth()+1);
     const todayRuns=periodRuns(dayStart,dayEnd);
     const weekRuns=periodRuns(weekStart,weekEnd);
-    return {dayStart,dayEnd,weekStart,weekEnd,todayRuns,weekRuns};
+    const monthRuns=periodRuns(monthStart,monthEnd);
+    return {dayStart,dayEnd,weekStart,weekEnd,monthStart,monthEnd,todayRuns,weekRuns,monthRuns};
   }
 
   function dateKey(value){
@@ -252,14 +275,14 @@
   function resourceGoalMeta(key){
     if(key==='inspiration'){
       const r=state.resources.inspiration;
-      return {name:'ひらめき',symbol:'✦',finalTarget:r.target,average:averageByBasis('inspiration',r.basis,r.manualAverage)};
+      return {name:'ひらめき',symbol:'✦',finalTarget:r.target,average:averageByBasis('inspiration',r.basis,r.manualAverage),accent:'var(--gold)'};
     }
     if(key==='sin'){
       const r=state.resources.sin;
-      return {name:'Sin',symbol:'◇',finalTarget:r.target,average:Math.max(0,Number(r.defaultGain)||0)};
+      return {name:'Sin',symbol:'◇',finalTarget:r.target,average:Math.max(0,Number(r.defaultGain)||0),accent:'var(--violet)'};
     }
     const plan=getPlan();
-    return {name:'不満',symbol:'◆',finalTarget:plan.need,average:plan.avg};
+    return {name:'不満',symbol:'◆',finalTarget:plan.need,average:plan.avg,accent:'var(--rose)'};
   }
 
   function periodGoalText(current,goal,avg){
@@ -318,6 +341,46 @@
     if (basis === 'all') return '全履歴';
     if (basis === 'manual') return '手入力';
     return `直近${basis}周`;
+  }
+
+  function formatDateInputValue(value){
+    if(!value)return '';
+    const d=new Date(value);
+    if(Number.isNaN(d.getTime()))return '';
+    const pad=n=>String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  }
+
+  function parseDateOnly(value){
+    const raw=String(value||'').trim();
+    if(!raw)return '';
+    const d=new Date(`${raw}T00:00:00`);
+    return Number.isNaN(d.getTime()) ? '' : d.toISOString();
+  }
+
+  function daysUntilInclusive(dateIso){
+    if(!dateIso)return null;
+    const target=new Date(dateIso);
+    if(Number.isNaN(target.getTime()))return null;
+    target.setHours(23,59,59,999);
+    const now=new Date();
+    const diff=target.getTime()-now.getTime();
+    return diff<=0 ? 0 : Math.ceil(diff/86400000);
+  }
+
+  function deadlinePlanFor(key){
+    const meta=resourceGoalMeta(key);
+    let current=0;
+    if(key==='inspiration') current=Math.max(0,Number(state.resources.inspiration.current)||0);
+    else if(key==='sin') current=Math.max(0,Number(state.resources.sin.current)||0);
+    else current=Math.max(0,Number(state.resources.dissatisfaction.current)||0);
+    const deadline=state.deadlines?.[key]?.date || '';
+    const daysLeft=daysUntilInclusive(deadline);
+    const remaining=Math.max(0,meta.finalTarget-current);
+    const perDay=(daysLeft!=null && daysLeft>0)?remaining/daysLeft:null;
+    const perWeek=(daysLeft!=null && daysLeft>0)?perDay*7:null;
+    const runsPerDay=(perDay!=null && meta.average>0)?perDay/meta.average:null;
+    return {...meta,current,deadline,daysLeft,remaining,perDay,perWeek,runsPerDay};
   }
 
   function renderAll(){
@@ -380,6 +443,7 @@
     setBar('#dissBar',planProgress);
 
     renderGoalTracker();
+    renderDeadlinePlanner();
     renderRecentRuns();
     renderMilestones();
   }
@@ -387,7 +451,7 @@
   function renderGoalTracker(){
     const root=$('#goalTrackerGrid');
     if(!root)return;
-    const periods=todayAndWeekStats();
+    const periods=periodStats();
     $('#todayRunCount').textContent=`${periods.todayRuns.length}周`;
     $('#weekRunCount').textContent=`${periods.weekRuns.length}周`;
     $('#recordStreak').textContent=`${currentStreak()}日`;
@@ -401,11 +465,14 @@
       const meta=resourceGoalMeta(key);
       const daily=Math.max(0,Number(state.goals?.[key]?.daily)||0);
       const weekly=Math.max(0,Number(state.goals?.[key]?.weekly)||0);
+      const monthly=Math.max(0,Number(state.goals?.[key]?.monthly)||0);
       const today=sumRunGain(periods.todayRuns,key);
       const week=sumRunGain(periods.weekRuns,key);
+      const month=sumRunGain(periods.monthRuns,key);
       const finalTarget=Math.max(0,Number(meta.finalTarget)||0);
       const dailyShare=finalTarget>0 && daily>0 ? daily/finalTarget*100 : 0;
       const weeklyShare=finalTarget>0 && weekly>0 ? weekly/finalTarget*100 : 0;
+      const monthlyShare=finalTarget>0 && monthly>0 ? monthly/finalTarget*100 : 0;
       const card=document.createElement('article');
       card.className=`goal-card ${cls}`;
       card.innerHTML=`
@@ -419,6 +486,38 @@
           <div class="goal-period-top"><span>今週 <b>${formatNumber(week)}</b></span><label>目標 <input type="text" inputmode="decimal" data-goal-resource="${key}" data-goal-period="weekly" value="${weekly>0?formatNumber(weekly):''}" placeholder="未設定"></label></div>
           <div class="progress goal-progress"><i style="width:${weekly>0?pct(week,weekly):0}%"></i></div>
           <div class="goal-period-meta"><span>${periodGoalText(week,weekly,meta.average)}</span><span>${weekly>0&&finalTarget>0?`最終の${weeklyShare.toFixed(weeklyShare>=10?1:2)}%`:''}</span></div>
+        </div>
+        <div class="goal-period">
+          <div class="goal-period-top"><span>今月 <b>${formatNumber(month)}</b></span><label>目標 <input type="text" inputmode="decimal" data-goal-resource="${key}" data-goal-period="monthly" value="${monthly>0?formatNumber(monthly):''}" placeholder="未設定"></label></div>
+          <div class="progress goal-progress"><i style="width:${monthly>0?pct(month,monthly):0}%"></i></div>
+          <div class="goal-period-meta"><span>${periodGoalText(month,monthly,meta.average)}</span><span>${monthly>0&&finalTarget>0?`最終の${monthlyShare.toFixed(monthlyShare>=10?1:2)}%`:''}</span></div>
+        </div>`;
+      root.appendChild(card);
+    });
+  }
+
+  function renderDeadlinePlanner(){
+    const root=$('#deadlinePlannerGrid');
+    if(!root)return;
+    const avgTime=averageDuration();
+    $('#deadlineAvgRunTime').textContent=avgTime>0?formatDuration(avgTime):'—';
+    root.innerHTML='';
+    const keys=['inspiration','sin','dissatisfaction'];
+    keys.forEach(key=>{
+      const plan=deadlinePlanFor(key);
+      const card=document.createElement('article');
+      card.className=`deadline-card ${key}`;
+      const progress=plan.finalTarget>0 ? pct(plan.current,plan.finalTarget) : 0;
+      const daysText=plan.daysLeft==null?'期限未設定':plan.daysLeft===0?(plan.remaining>0?'期限到来':'達成済み'):`残り${plan.daysLeft}日`;
+      card.innerHTML=`
+        <div class="goal-card-head"><strong>${plan.symbol} ${plan.name}</strong><label class="deadline-input-inline">期限 <input type="date" data-deadline-resource="${key}" value="${formatDateInputValue(plan.deadline)}"></label></div>
+        <div class="progress deadline-progress"><i style="width:${progress}%"></i></div>
+        <div class="deadline-topline"><span>${daysText}</span><span>残り ${formatNumber(plan.remaining)}</span></div>
+        <div class="deadline-meta-grid">
+          <div><span>必要 / 日</span><b>${plan.perDay!=null?formatNumber(plan.perDay):'—'}</b></div>
+          <div><span>必要 / 週</span><b>${plan.perWeek!=null?formatNumber(plan.perWeek):'—'}</b></div>
+          <div><span>必要周回 / 日</span><b>${plan.runsPerDay!=null?`${formatNumber(plan.runsPerDay)}周`: '—'}</b></div>
+          <div><span>残り推定時間</span><b>${(plan.average>0 && plan.remaining>0 && avgTime>0)?formatEstimatedTime(Math.ceil(plan.remaining/plan.average)*avgTime):'—'}</b></div>
         </div>`;
       root.appendChild(card);
     });
@@ -813,7 +912,18 @@
       state.goals[key][period]=n;
       localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
       renderGoalTracker();
-      toast(`${period==='daily'?'今日':'今週'}の目標を更新しました`);
+      toast(`${period==='daily'?'今日':period==='weekly'?'今週':'今月'}の目標を更新しました`);
+    });
+
+    $('#deadlinePlannerGrid').addEventListener('change',e=>{
+      const input=e.target.closest('[data-deadline-resource]');
+      if(!input)return;
+      const key=input.dataset.deadlineResource;
+      state.deadlines=state.deadlines||clone(defaultState.deadlines);
+      state.deadlines[key]=state.deadlines[key]||{date:''};
+      state.deadlines[key].date=parseDateOnly(input.value);
+      saveState();
+      toast('期限日を更新しました');
     });
 
     $('#openMilestoneSettings').addEventListener('click',openMilestoneModal);

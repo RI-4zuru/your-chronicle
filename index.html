@@ -101,7 +101,7 @@
 
         <section class="panel goal-tracker-panel">
           <div class="section-head goal-tracker-head">
-            <div><div class="eyebrow">DAILY / WEEKLY GOALS</div><h3>今日・今週の目標</h3></div>
+            <div><div class="eyebrow">DAILY / WEEKLY / MONTHLY GOALS</div><h3>今日・今週・今月の目標</h3></div>
             <div class="goal-overview-stats">
               <span>今日 <b id="todayRunCount">0周</b></span>
               <span>今週 <b id="weekRunCount">0周</b></span>
@@ -109,7 +109,19 @@
             </div>
           </div>
           <div id="goalTrackerGrid" class="goal-tracker-grid"></div>
-          <div class="goal-note">目標値はメイン画面から直接変更できます。週次集計は月曜 0:00 から始まります。</div>
+          <div class="goal-note">目標値はメイン画面から直接変更できます。週次集計は月曜 0:00 から始まり、月次集計は毎月1日 0:00 から始まります。</div>
+        </section>
+
+        
+        <section class="panel deadline-panel">
+          <div class="section-head">
+            <div><div class="eyebrow">FINAL GOAL PACE</div><h3>最終目標へのペース</h3></div>
+            <div class="goal-overview-stats">
+              <span>平均周回時間 <b id="deadlineAvgRunTime">—</b></span>
+            </div>
+          </div>
+          <div id="deadlinePlannerGrid" class="deadline-grid"></div>
+          <div class="goal-note">各要素ごとに期限日を設定すると、その日までに必要な1日あたり・1週あたり・1日あたり周回数を表示します。</div>
         </section>
 
         <div class="dashboard-lower">
@@ -137,6 +149,9 @@
           <div class="mini-card"><span>ひらめき・全平均</span><b id="runInspAvg">—</b></div>
           <div class="mini-card"><span>不満・全平均</span><b id="runDissAvg">—</b></div>
           <div class="mini-card"><span>直近10周</span><b id="runRecentAvg">—</b></div>
+          <div class="mini-card"><span>ひらめき最高</span><b id="runInspBest">—</b></div>
+          <div class="mini-card"><span>不満最高</span><b id="runDissBest">—</b></div>
+          <div class="mini-card"><span>最短周回時間</span><b id="runFastest">—</b></div>
         </div>
 
         <section class="panel run-table-panel">

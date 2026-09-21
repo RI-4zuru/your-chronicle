@@ -134,7 +134,7 @@ dialog{border-radius:16px}
 .stat-strip{grid-template-columns:repeat(4,minmax(0,1fr))}
 .stat-strip>div{min-width:0}
 .stat-strip b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.run-stats-grid{grid-template-columns:repeat(5,1fr)}
+.run-stats-grid{grid-template-columns:repeat(4,1fr)}
 .mini-card small{display:block;margin-top:3px;color:#777b90;font-size:9px}
 .summary-main{grid-template-columns:repeat(5,1fr)}
 .run-meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
@@ -290,11 +290,28 @@ body.modal-open{overflow:hidden}
 .goal-period-top>span b{color:var(--text);font-size:11px;margin-left:3px}
 .goal-period-top label{display:flex;align-items:center;gap:5px;font-size:8px;color:#7f8297;white-space:nowrap}
 .goal-period-top input{width:76px;padding:4px 6px;border-radius:7px;text-align:right;font-size:10px}
-.goal-progress{height:4px;margin-top:6px;--accent:var(--gold)}
+.goal-progress{height:4px;margin-top:6px}
 .goal-progress i{background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 60%, white))}
 .goal-period-meta{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:4px;color:#7f8297;font-size:8px;line-height:1.35}
 .goal-period-meta span:last-child{text-align:right}
 .goal-note{margin-top:7px;color:#707387;font-size:8px;text-align:right}
+.deadline-panel{margin-top:10px;padding:14px 16px}
+.deadline-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:9px}
+.deadline-card{--accent:var(--gold);padding:10px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.018)}
+.deadline-card.inspiration{--accent:var(--gold)}
+.deadline-card.sin{--accent:var(--violet)}
+.deadline-card.dissatisfaction{--accent:var(--rose)}
+.deadline-progress{height:5px;margin:7px 0 6px}
+.deadline-progress i{background:linear-gradient(90deg,var(--accent),color-mix(in srgb,var(--accent) 60%, white))}
+.deadline-input-inline{display:flex;align-items:center;gap:5px;font-size:8px;color:#7f8297;white-space:nowrap}
+.deadline-input-inline input{width:130px;padding:4px 6px;border-radius:7px;font-size:10px}
+.deadline-topline{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#7f8297;font-size:8px;margin-bottom:7px}
+.deadline-topline span:last-child{text-align:right;color:var(--text)}
+.deadline-meta-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}
+.deadline-meta-grid>div{padding:8px 9px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02)}
+.deadline-meta-grid span{display:block;font-size:8px;color:#7f8297;margin-bottom:3px}
+.deadline-meta-grid b{font-size:11px;color:var(--text)}
+
 .milestone-sub{display:flex;justify-content:space-between;gap:8px;margin-top:5px;color:#777b90;font-size:8px}
 .milestone-settings-card{width:min(520px,calc(100vw - 36px))}
 .modal-help{color:var(--muted);font-size:11px;line-height:1.55;margin:8px 0 12px}
@@ -307,7 +324,7 @@ body.modal-open{overflow:hidden}
 
 @media(max-width:980px){
   .goal-tracker-grid{grid-template-columns:1fr}
-  .goal-card{display:grid;grid-template-columns:120px 1fr 1fr;gap:10px;align-items:center}
+  .goal-card{display:grid;grid-template-columns:120px 1fr 1fr 1fr;gap:10px;align-items:start}
   .goal-card-head{margin-bottom:0;display:block}
   .goal-card-head span{display:block;margin-top:3px}
   .goal-period+.goal-period{margin-top:0;padding-top:0;border-top:0;border-left:1px solid rgba(255,255,255,.055);padding-left:10px}
@@ -320,4 +337,18 @@ body.modal-open{overflow:hidden}
   .goal-period+.goal-period{margin-top:8px;padding-top:8px;padding-left:0;border-left:0;border-top:1px solid rgba(255,255,255,.055)}
   .goal-period-top input{width:68px}
   .goal-note{text-align:left}
+}
+
+@media(max-width:1180px){
+  .deadline-grid{grid-template-columns:1fr}
+}
+
+
+@media(max-width:980px){
+  .deadline-grid{grid-template-columns:1fr}
+}
+@media(max-width:640px){
+  .deadline-panel{padding:12px}
+  .deadline-input-inline input{width:118px}
+  .deadline-meta-grid{grid-template-columns:1fr 1fr}
 }
